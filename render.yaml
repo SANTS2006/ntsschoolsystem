@@ -10,7 +10,7 @@ services:
     # roughly a minute to wake on the next visit (users see a slow first page load). Change to
     # `starter` (about $7/month) for an always-on service - nothing else needs to change.
     plan: free
-    region: frankfurt        # pick the region closest to your Neon database and your users
+    region: frankfurt # pick the region closest to your Neon database and your users
     healthCheckPath: /api/v1/health/
     autoDeploy: true
     # (Migrations run in deploy/start.sh - Render's pre-deploy hook isn't available on the free plan.)
@@ -22,18 +22,18 @@ services:
       - key: DJANGO_DEBUG
         value: "False"
       - key: DJANGO_ALLOWED_HOSTS
-        value: nts-school-system.onrender.com,school.ntsdigitalsolutions.com
+        value: ntsschoolsystem.onrender.com,school.ntsdigitalsolutions.com
       # Both the Render-given address and the custom domain are accepted everywhere — the custom
       # domain's DNS/certificate isn't resolving reliably yet, so nts-school-system.onrender.com
       # is the one to actually use and share for now. Whichever one a request actually arrives on
       # is also what emailed links point back to (see apps.common.email.frontend_base_url) — this
       # FRONTEND_URL is only the fallback for contexts with no request (management commands).
       - key: CORS_ALLOWED_ORIGINS
-        value: https://nts-school-system.onrender.com,https://school.ntsdigitalsolutions.com
+        value: https://ntsschoolsystem.onrender.com,https://school.ntsdigitalsolutions.com
       - key: CSRF_TRUSTED_ORIGINS
-        value: https://nts-school-system.onrender.com,https://school.ntsdigitalsolutions.com
+        value: https://ntsschoolsystem.onrender.com,https://school.ntsdigitalsolutions.com
       - key: FRONTEND_URL
-        value: https://nts-school-system.onrender.com
+        value: https://ntsschoolsystem.onrender.com
       # Trusted proxy hops between the internet and gunicorn. VERIFY after the first deploy — see
       # deploy/README.md section 5 (a wrong value mis-attributes client IPs).
       - key: TRUSTED_PROXY_COUNT
