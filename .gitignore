@@ -1,0 +1,49 @@
+# --- Environment / secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Python / Django ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+.venv/
+venv/
+env/
+staticfiles/
+media/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+celerybeat-schedule
+
+# --- Node / React ---
+node_modules/
+dist/
+build/
+.vite/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Claude Code local settings ---
+.claude/
+backend/backups_data/
+dist-ssr/
+backend/website_dist/
+.lh/

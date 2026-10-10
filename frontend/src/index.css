@@ -1,0 +1,584 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Poppins", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+:root {
+  /* The two colours everything is built from. They default to the NTS logo's blue and cyan; a school's
+   * own pair (chosen by the platform admin) replaces them at runtime — see lib/brandTheme.ts. */
+  --brand-primary: #1565c0;
+  --brand-secondary: #22d3ee;
+
+  --color-primary: var(--brand-primary);
+  --color-primary-hover: color-mix(in srgb, var(--brand-primary) 82%, black);
+  --color-primary-contrast: #ffffff;
+  --color-accent: var(--brand-secondary);
+
+  --color-bg: #ffffff;
+  --color-bg-subtle: color-mix(in srgb, var(--brand-primary) 5%, #f6f8fc);
+  --color-surface: #ffffff;
+  --color-border: color-mix(in srgb, var(--brand-primary) 12%, #e3e8f1);
+  --color-text: #0f1a33;
+  --color-text-muted: #5b6b8c;
+
+  --color-success: #059669;
+  --color-warning: #d97706;
+  --color-danger: #e11d48;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --shadow-sm: 0 1px 2px rgba(15, 26, 51, 0.04), 0 1px 3px rgba(15, 26, 51, 0.05);
+  --shadow-md: 0 10px 30px -10px rgba(15, 26, 51, 0.18), 0 4px 10px -6px rgba(15, 26, 51, 0.08);
+
+  /* Gradients: buttons, active nav, page backgrounds — all derived from the two brand colours */
+  --gradient-primary: linear-gradient(135deg, var(--color-accent) 0%, var(--color-primary) 55%, color-mix(in srgb, var(--color-primary) 55%, black) 100%);
+  --gradient-primary-hover: linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 75%, white) 0%, color-mix(in srgb, var(--color-primary) 85%, white) 55%, color-mix(in srgb, var(--color-primary) 65%, black) 100%);
+  --gradient-danger: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
+  --gradient-danger-hover: linear-gradient(135deg, #fda4af 0%, #be123c 100%);
+  --gradient-page: linear-gradient(160deg, color-mix(in srgb, var(--brand-primary) 4%, #f4f8ff) 0%, color-mix(in srgb, var(--brand-primary) 10%, #e6efff) 100%);
+  /* The sidebar follows the theme: a light panel with dark text here, the deep panel with light text in dark mode. */
+  --gradient-sidebar: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--brand-primary) 5%, #f6f8fc) 100%);
+  --sidebar-fg: #0f172a;
+  --sidebar-fg-muted: color-mix(in srgb, #0f172a 68%, transparent);
+  --sidebar-fg-faint: color-mix(in srgb, #0f172a 55%, transparent);
+  --sidebar-hover: color-mix(in srgb, var(--brand-primary) 9%, transparent);
+  --sidebar-active-soft: color-mix(in srgb, var(--brand-primary) 14%, transparent);
+  --sidebar-border: color-mix(in srgb, #0f172a 10%, transparent);
+
+  --scrollbar-thumb: color-mix(in srgb, var(--brand-primary) 25%, #c7d2e6);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--brand-primary) 45%, #a3b3d4);
+  --scrollbar-track: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-primary: color-mix(in srgb, var(--brand-primary) 62%, white);
+    --color-primary-hover: color-mix(in srgb, var(--brand-primary) 45%, white);
+    --color-bg: #060b1f;
+    --color-bg-subtle: color-mix(in srgb, var(--brand-primary) 12%, #070b18);
+    --color-surface: color-mix(in srgb, var(--brand-primary) 17%, #080d1c);
+    --color-border: color-mix(in srgb, var(--brand-primary) 30%, #0d1326);
+    --color-text: #e6eefc;
+    --color-text-muted: #93a8d6;
+    --color-success: #34d399;
+    --color-warning: #fbbf24;
+    --color-danger: #fb7185;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+
+    --gradient-primary: linear-gradient(135deg, var(--color-accent) 0%, var(--brand-primary) 55%, color-mix(in srgb, var(--brand-primary) 50%, black) 100%);
+    --gradient-primary-hover: linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 75%, white) 0%, color-mix(in srgb, var(--brand-primary) 80%, white) 55%, color-mix(in srgb, var(--brand-primary) 60%, black) 100%);
+    --gradient-page: linear-gradient(160deg, #060b1f 0%, color-mix(in srgb, var(--brand-primary) 14%, #070b18) 100%);
+    --gradient-sidebar: linear-gradient(180deg, color-mix(in srgb, var(--brand-primary) 24%, #040815) 0%, color-mix(in srgb, var(--brand-primary) 10%, #02040c) 100%);
+    --sidebar-fg: #ffffff;
+    --sidebar-fg-muted: rgba(255, 255, 255, 0.7);
+    --sidebar-fg-faint: rgba(255, 255, 255, 0.6);
+    --sidebar-hover: rgba(255, 255, 255, 0.08);
+    --sidebar-active-soft: rgba(255, 255, 255, 0.12);
+    --sidebar-border: rgba(255, 255, 255, 0.1);
+
+    --scrollbar-thumb: color-mix(in srgb, var(--brand-primary) 35%, #101830);
+    --scrollbar-thumb-hover: color-mix(in srgb, var(--brand-primary) 55%, #1b2a55);
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-primary: color-mix(in srgb, var(--brand-primary) 62%, white);
+  --color-primary-hover: color-mix(in srgb, var(--brand-primary) 45%, white);
+  --color-bg: #060b1f;
+  --color-bg-subtle: color-mix(in srgb, var(--brand-primary) 12%, #070b18);
+  --color-surface: color-mix(in srgb, var(--brand-primary) 17%, #080d1c);
+  --color-border: color-mix(in srgb, var(--brand-primary) 30%, #0d1326);
+  --color-text: #e6eefc;
+  --color-text-muted: #93a8d6;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #fb7185;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+
+  --gradient-primary: linear-gradient(135deg, var(--color-accent) 0%, var(--brand-primary) 55%, color-mix(in srgb, var(--brand-primary) 50%, black) 100%);
+  --gradient-primary-hover: linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 75%, white) 0%, color-mix(in srgb, var(--brand-primary) 80%, white) 55%, color-mix(in srgb, var(--brand-primary) 60%, black) 100%);
+  --gradient-page: linear-gradient(160deg, #060b1f 0%, color-mix(in srgb, var(--brand-primary) 14%, #070b18) 100%);
+  --gradient-sidebar: linear-gradient(180deg, color-mix(in srgb, var(--brand-primary) 24%, #040815) 0%, color-mix(in srgb, var(--brand-primary) 10%, #02040c) 100%);
+  --sidebar-fg: #ffffff;
+  --sidebar-fg-muted: rgba(255, 255, 255, 0.7);
+  --sidebar-fg-faint: rgba(255, 255, 255, 0.6);
+  --sidebar-hover: rgba(255, 255, 255, 0.08);
+  --sidebar-active-soft: rgba(255, 255, 255, 0.12);
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+
+  --scrollbar-thumb: color-mix(in srgb, var(--brand-primary) 35%, #101830);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--brand-primary) 55%, #1b2a55);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family:
+    "Poppins",
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Page headings: every page opens with an <h1> and a muted line under it. */
+main h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+main h1 + p {
+  margin-top: 0.25rem;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+/* Tables on a phone: each row becomes a card, each cell a "Heading   value" line. The data-label on every
+ * cell is filled in by TableContainer (components/ui/Table.tsx). */
+@media (max-width: 639px) {
+  .table-cards {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .table-cards > table,
+  .table-cards > table > tbody {
+    display: block;
+    width: 100%;
+  }
+  .table-cards > table > thead {
+    display: none;
+  }
+  .table-cards > table > tbody > tr {
+    display: block;
+    margin-bottom: 0.75rem;
+    padding: 0.35rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+  }
+  .table-cards > table > tbody > tr > td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    max-width: none;
+    padding: 0.55rem 0;
+    border: 0;
+    border-bottom: 1px dashed var(--color-border);
+    overflow: visible;
+    white-space: normal;
+    text-align: right;
+    word-break: break-word;
+  }
+  .table-cards > table > tbody > tr > td:last-child {
+    border-bottom: 0;
+  }
+  .table-cards > table > tbody > tr > td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    max-width: 45%;
+    color: var(--color-text-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+  .table-cards > table > tbody > tr > td[data-label=""]::before {
+    display: none;
+  }
+  .table-cards > table > tbody > tr > td[data-label=""] {
+    justify-content: flex-end;
+    text-align: left;
+  }
+  /* A cell marked `card-title-cell` is the card's heading: full width, left aligned, no "Heading" label beside it. */
+  .table-cards > table > tbody > tr > td.card-title-cell {
+    display: block;
+    text-align: left;
+    font-size: 1rem;
+  }
+  .table-cards > table > tbody > tr > td.card-title-cell::before {
+    display: none;
+  }
+  /* The pagination bar under the cards stands on its own card. */
+  .table-cards > div {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+}
+
+/* Loading indicators ------------------------------------------------------------------------------------ */
+/* Page / table loader: the brand logo in a disc with a ring of the brand colours running round it. */
+.brand-loader {
+  position: relative;
+}
+.brand-loader__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: conic-gradient(from 0deg, transparent 0 20%, var(--color-accent) 60%, var(--color-primary) 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  animation: brand-spin 1s linear infinite;
+}
+.brand-loader__logo {
+  display: grid;
+  place-items: center;
+  width: 78%;
+  height: 78%;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px var(--color-border);
+  animation: brand-breathe 2s ease-in-out infinite;
+}
+.brand-loader__logo img {
+  width: 82%;
+  height: 82%;
+  object-fit: contain;
+}
+.brand-loader__text {
+  animation: brand-fade 1.6s ease-in-out infinite;
+}
+
+/* Button activity: a ring with a comet, plus a steady dot, in the button's own text colour. */
+.activity-indicator {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 1.1em;
+  height: 1.1em;
+}
+.activity-indicator__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: conic-gradient(from 0deg, transparent 0 15%, currentColor 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+  animation: brand-spin 0.8s linear infinite;
+}
+.activity-indicator__dot {
+  position: absolute;
+  inset: 36%;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: brand-breathe 1.2s ease-in-out infinite;
+}
+
+@keyframes brand-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes brand-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.88);
+    opacity: 0.8;
+  }
+}
+@keyframes brand-fade {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Layout safety nets: nothing inside the app may push the page wider than the screen. Flex/grid children may shrink
+ * below their content, long words and addresses wrap instead of overflowing, and media never exceeds its box. */
+main,
+main > div {
+  min-width: 0;
+}
+main :where(h1, h2, h3, h4, p, label, legend, li, dd, dt, summary) {
+  overflow-wrap: anywhere;
+}
+main :where(.flex, .grid) > :not(button, a, svg, img, input, select, textarea, span.shrink-0) {
+  min-width: 0;
+}
+img,
+video,
+canvas {
+  max-width: 100%;
+}
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
+}
+
+/* Browser autofill (saved emails, passwords): Chrome paints its own pale-blue fill and fades the text, which is
+ * unreadable on the dark theme. Keep the field's own surface colour and text colour instead. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--color-text);
+  caret-color: var(--color-text);
+  -webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset;
+  box-shadow: 0 0 0 1000px var(--color-surface) inset;
+  transition: background-color 600000s ease-in-out 0s;
+}
+
+/* Custom scrollbar (WebKit/Blink) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Scoped printing: a page marks the one thing it wants printed with data-printable-root, and
+ * window.print() then prints only that (and nothing of the surrounding app shell/sidebar/nav) —
+ * see src/hooks/usePrintableSection.ts. Everything is hidden by default; the printable root and
+ * its descendants are switched back to visible and taken out of the app's normal layout so they
+ * render as their own page, starting at the top-left. */
+/* While a page section is being printed (lib/printPortal.ts) the app itself is dropped from the print layout,
+ * so only the section's copy on <body> is printed, flowing across as many pages as it needs. */
+.print-clone {
+  display: none;
+}
+@media print {
+  body.print-portal #root {
+    display: none !important;
+  }
+  .print-clone {
+    display: block !important;
+    position: static !important;
+    padding: 0 !important;
+  }
+  .print-clone * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-clone > * {
+    box-shadow: none !important;
+  }
+  .print-clone [class*="rounded"] {
+    break-inside: avoid;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  [data-printable-root],
+  [data-printable-root] * {
+    visibility: visible;
+  }
+  [data-printable-root] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    /* Printed pages are white regardless of the app's own theme — a viewer in dark mode would
+     * otherwise print near-white text that's invisible on paper. Re-declaring the light values
+     * of every color token used inside a printable page means everything under this element
+     * (via var(--color-text) etc.) renders legibly no matter which theme was active on screen. */
+    --color-bg: #ffffff;
+    --color-bg-subtle: #f4f6fb;
+    --color-surface: #ffffff;
+    --color-border: #e3e8f1;
+    --color-text: #0f1a33;
+    --color-text-muted: #636d92;
+    background: #ffffff;
+    color: #0f1a33;
+  }
+  [data-print-hidden] {
+    display: none !important;
+  }
+}
+
+/* ID cards (features/idcards/IdCardSheet.tsx). Printing goes through the scoped-print rule above: the
+ * cards are rendered in a portal on <body> marked data-printable-root, and the app itself (#root) is
+ * dropped from the print layout so it adds no blank pages. Lives here, not in an inline <style>, because
+ * the production Content-Security-Policy forbids inline style elements. */
+.idcard-print-root {
+  display: none;
+}
+@media print {
+  @page {
+    margin: 10mm;
+  }
+  .idcard-print-root {
+    display: block !important;
+  }
+  .idcard-print-pair {
+    display: flex;
+    gap: 8mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 8mm;
+  }
+  .idcard-print-pair > * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* The "Back" / "Back to …" control on every detail page: a bordered pill with the app's back arrow. */
+.back-button {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s, color 0.15s, background-color 0.15s;
+}
+.back-button:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.back-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* A row's action buttons (Edit, Delete, ...) stay in one straight line. A table that is wider than its card scrolls
+ * sideways inside the card (TableContainer) instead of wrapping them or stretching the page. */
+td > .flex.items-center.justify-end {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+td > .flex.items-center.justify-end > * {
+  flex-shrink: 0;
+}
+
+/* Nothing on a page may push the page itself wider than the window. */
+main {
+  overflow-x: hidden;
+}
+
+/* An add/edit form shown inside a dialog (see components/FormModal.tsx): the dialog already has a title and a frame, so
+ * the form page's own heading and card chrome are dropped. */
+.modal-form h1 {
+  display: none;
+}
+.modal-form [data-slot="card"] {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.modal-form [data-slot="card"]:hover {
+  border: 0;
+  box-shadow: none;
+}
+.modal-form [data-slot="card"] > [data-slot="card-header"] {
+  display: none;
+}
+.modal-form [data-slot="card"] > div:not([data-slot="card-header"]) {
+  padding: 0;
+}
+.modal-form > div {
+  gap: 0;
+}
+
+/* Everything you can press shows the pointing hand (and a disabled one says so). */
+button,
+[role="button"],
+[role="radio"],
+[role="switch"],
+[role="tab"],
+[role="menuitem"],
+summary,
+select,
+label[for],
+input[type="checkbox"],
+input[type="radio"],
+input[type="file"],
+input[type="submit"],
+input[type="button"],
+a[href] {
+  cursor: pointer;
+}
+button:disabled,
+[aria-disabled="true"],
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+}
+
+/* A small read-only details page shown in a dialog (components/FormModal.tsx, `detail`): the dialog has its own title and
+ * a close button, so the page's "Back" link goes, and the cards lose their own frame. */
+.modal-detail .back-button {
+  display: none;
+}
+.modal-detail [data-slot="card"] {
+  box-shadow: none;
+}

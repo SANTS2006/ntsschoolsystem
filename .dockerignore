@@ -1,0 +1,26 @@
+**/.venv
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/.env
+**/.env.*
+!**/.env.production.example
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/dist
+backend/staticfiles
+backend/media
+backend/frontend_dist
+.git
+docs
+deploy
+Dockerfile
+# test code has no place in the production image
+backend/tests
+**/tests.py
+**/test_*.py
+backend/conftest.py
+backend/pytest.ini
+backend/website_dist
+website/dist-ssr
