@@ -8,7 +8,7 @@ import { Icon } from "./Icon";
 function BrandMark() {
   return (
     <Link to="/" className="brand">
-      <img src="/nts-logo-small.png" alt="" width={80} height={40} />
+      <img src="/nts-logo-small.png" alt="" width={92} height={46} />
       <span className="brand-text">
         {SITE.product}
         <small>by {SITE.company}</small>

@@ -32,14 +32,14 @@ export function LogoBadge({
 }) {
   if (platform) {
     return (
-      <span className={cn("flex h-9 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white px-1.5 shadow-sm", className)}>
+      <span className={cn("flex h-9 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white px-1.5 shadow-sm", className)}>
         <img src="/nts-logo.webp" alt="NTS" className="h-5 w-auto max-w-full object-contain" />
       </span>
     );
   }
   if (logoUrl) {
     return (
-      <span className={cn("flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg", className)}>
+      <span className={cn("flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-xl", className)}>
         <img src={logoUrl} alt="" className="size-full object-cover" />
       </span>
     );
