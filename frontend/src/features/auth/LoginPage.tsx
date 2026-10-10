@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { Home, Search } from "lucide-react";
 
 import { AuthCard } from "./components/AuthCard";
 import { BrandMark } from "./components/BrandMark";
@@ -23,6 +23,14 @@ export function LoginPage() {
           >
             <Search className="size-4" aria-hidden="true" />
             Find your school
+          </a>
+          {/* A full page load on purpose: "/" is the public website, which is served by the server, not this app's router. */}
+          <a
+            href="/"
+            className="mt-2 inline-flex w-fit items-center gap-2 rounded-md border border-[var(--color-border)] px-3 py-2 text-sm font-semibold text-[var(--color-text)] transition-colors hover:border-[var(--color-primary)] hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-primary)]"
+          >
+            <Home className="size-4" aria-hidden="true" />
+            Back to website
           </a>
         </div>
       }
