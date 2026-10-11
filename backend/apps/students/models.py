@@ -72,4 +72,9 @@ class Student(TenantScopedModel, TimeStampedModel):
                 raise ValueError(f"Student.{field_name} must belong to the same school")
         if self.user_id and self.user.school_id != self.school_id:
             raise ValueError("Student.user must belong to the same school")
+        adding = self._state.adding
         super().save(*args, **kwargs)
+        # The per-year enrolment history follows the "current class/year" pointer, whatever path changed it.
+        from apps.academics.year_services import sync_enrollment
+
+        sync_enrollment(self, source="admission" if adding else "manual")

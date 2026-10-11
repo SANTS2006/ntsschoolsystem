@@ -77,7 +77,12 @@ class AcademicYearFactory(DjangoModelFactory):
     name = factory.Sequence(lambda n: f"AY-{n}")
     start_date = date(2025, 9, 1)
     end_date = date(2026, 7, 31)
-    is_current = True
+
+    @factory.lazy_attribute
+    def is_current(self):
+        # A school has at most one current year (a database constraint): the first one made is current, later ones are
+        # not unless a test says so explicitly (and clears the other first).
+        return not AcademicYear.unscoped_objects.filter(school=self.school, is_current=True).exists()
 
 
 class TermFactory(DjangoModelFactory):

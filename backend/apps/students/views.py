@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from apps.audit.services import log_action
@@ -44,6 +45,17 @@ class StudentViewSet(TenantScopedModelViewSet):
         # on apps.academics.views.AcademicsModelViewSet for why that matters
         # for a TenantScopedModel.
         qs = Student.objects.select_related("current_academic_year", "current_class", "current_section").all()
+        # A *viewing* year: who was enrolled then (their class that year is on `enrollment_class`). Only ever one of this
+        # school's own years, and it never changes anything about the school's active year.
+        viewing_year = self.request.query_params.get("academic_year")
+        if viewing_year:
+            from apps.academics.year_services import YearLifecycleError, resolve_year
+
+            try:
+                year = resolve_year(get_current_school(), viewing_year)
+            except YearLifecycleError as exc:
+                raise ValidationError({"academic_year": str(exc)}) from exc
+            qs = qs.filter(enrollments__academic_year=year).distinct()
         return scope_students_for_teacher(qs, self.request.user)
 
     def get_permissions(self):
@@ -58,6 +70,31 @@ class StudentViewSet(TenantScopedModelViewSet):
     def perform_create(self, serializer):
         student = serializer.save(school_id=get_current_school_id())
         provision_student_account(student)
+
+    @action(detail=True, methods=["get"])
+    def enrollments(self, request, pk=None):
+        """The student's class in every academic year they were enrolled (newest first). Same visibility as the student."""
+        student = self.get_object()
+        rows = student.enrollments.select_related("academic_year", "school_class", "section")
+        return Response(
+            {
+                "success": True,
+                "message": "",
+                "code": "OK",
+                "errors": [],
+                "enrollments": [
+                    {
+                        "academic_year": e.academic_year.name,
+                        "academic_year_id": str(e.academic_year_id),
+                        "year_status": e.academic_year.status,
+                        "class": e.school_class.name,
+                        "section": e.section.name if e.section else "",
+                        "outcome": e.outcome,
+                    }
+                    for e in rows
+                ],
+            }
+        )
 
     def perform_destroy(self, instance):
         instance.status = Student.Status.ARCHIVED

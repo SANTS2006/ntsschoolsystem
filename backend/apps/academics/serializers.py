@@ -31,15 +31,17 @@ def _reject_if_year_archived(academic_year):
 
 
 class AcademicYearSerializer(serializers.ModelSerializer):
+    status = serializers.CharField(read_only=True)
+
     class Meta:
         model = AcademicYear
         fields = [
-            "id", "name", "start_date", "end_date", "is_current", "is_archived", "archived_at",
-            "created_at", "updated_at",
+            "id", "name", "start_date", "end_date", "is_current", "is_archived", "archived_at", "status",
+            "activated_at", "created_at", "updated_at",
         ]
-        # is_archived/archived_at are only ever set by the archive/unarchive actions
-        # (services.archive_academic_year/unarchive_academic_year), never by a plain create/update.
-        read_only_fields = ["id", "is_archived", "archived_at", "created_at", "updated_at"]
+        # is_current/is_archived are only ever changed by the activate/archive/unarchive actions (year_services,
+        # services.archive_academic_year), never by a plain create/update: that is what keeps "one active year" true.
+        read_only_fields = ["id", "is_current", "is_archived", "archived_at", "status", "activated_at", "created_at", "updated_at"]
 
 
 class TermSerializer(serializers.ModelSerializer):

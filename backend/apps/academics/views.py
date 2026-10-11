@@ -64,6 +64,7 @@ _ACTION_SUFFIX = {
     "close_ca_bulk": "update",
     "archive": "update",
     "unarchive": "update",
+    "activate": "update",
 }
 
 
@@ -136,6 +137,22 @@ class AcademicYearViewSet(AcademicsModelViewSet):
             return _error(str(exc), "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
         return _ok(
             f'"{year.name}" archived — its records are now read-only.',
+            academic_year=AcademicYearSerializer(year, context={"request": request}).data,
+        )
+
+    @action(detail=True, methods=["post"])
+    def activate(self, request, pk=None):
+        """Makes this the school's active year and closes the previous one (see year_services.activate_academic_year)."""
+        from . import year_services
+
+        year = self.get_object()
+        try:
+            year_services.activate_academic_year(year, actor=request.user)
+        except year_services.YearLifecycleError as exc:
+            return _error(str(exc), "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
+        year.refresh_from_db()
+        return _ok(
+            f'"{year.name}" is now the active academic year.',
             academic_year=AcademicYearSerializer(year, context={"request": request}).data,
         )
 

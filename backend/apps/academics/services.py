@@ -420,6 +420,21 @@ def _decide_promotion_outcome(school_class, overall_percent, threshold_percent):
     return PromotionRecord.Status.REPEATED, school_class
 
 
+def _record_year_enrollment(student, old_class, old_year, new_class, new_year, status):
+    """Keeps the enrolment history in step with a promotion decision made through the older per-class tools: the year that
+    ended gets its outcome, and the new year gets an enrolment (never a duplicate: one row per student per year)."""
+    from .models import PromotionRecord, StudentEnrollment
+
+    outcome = "promoted" if status == PromotionRecord.Status.PROMOTED else "repeated"
+    StudentEnrollment.objects.filter(student=student, academic_year=old_year).update(outcome=outcome)
+    if new_class is not None and new_year is not None:
+        StudentEnrollment.objects.get_or_create(
+            student=student,
+            academic_year=new_year,
+            defaults={"school": student.school, "school_class": new_class, "source": StudentEnrollment.Source.MANUAL},
+        )
+
+
 @transaction.atomic
 def bulk_promote(*, school_class, academic_year, target_academic_year, students, actor):
     """One PromotionRecord per student, decided purely from their own Overall % against the
@@ -478,6 +493,7 @@ def bulk_promote(*, school_class, academic_year, target_academic_year, students,
             Student.objects.filter(pk=student.pk).update(
                 current_class=new_class, current_academic_year=target_academic_year
             )
+            _record_year_enrollment(student, school_class, academic_year, new_class, target_academic_year, status)
 
     return created, skipped
 
@@ -512,6 +528,7 @@ def manual_promote(*, student, new_class, new_academic_year, status, external_ex
         actor=actor,
     )
     Student.objects.filter(pk=student.pk).update(current_class=new_class, current_academic_year=new_academic_year)
+    _record_year_enrollment(student, latest.previous_class, latest.previous_academic_year, new_class, new_academic_year, status)
     return record
 
 

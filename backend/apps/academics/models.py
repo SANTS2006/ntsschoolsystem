@@ -16,12 +16,19 @@ class AcademicYear(TenantScopedModel, TimeStampedModel):
     # that touches a year-scoped model runs through.
     is_archived = models.BooleanField(default=False)
     archived_at = models.DateTimeField(null=True, blank=True)
+    # Set only by apps.academics.year_services.activate_academic_year (never by a plain create/update).
+    activated_at = models.DateTimeField(null=True, blank=True)
+    activated_by = models.ForeignKey("users.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
 
     class Meta:
         db_table = "academic_years"
         ordering = ["-start_date"]
         constraints = [
             models.UniqueConstraint(fields=["school", "name"], name="unique_academic_year_name_per_school"),
+            # The database itself refuses a second active year for a school, whatever the application does.
+            models.UniqueConstraint(
+                fields=["school"], condition=models.Q(is_current=True), name="one_current_academic_year_per_school"
+            ),
             models.CheckConstraint(
                 condition=models.Q(end_date__gt=models.F("start_date")),
                 name="academic_year_end_after_start",
@@ -30,6 +37,13 @@ class AcademicYear(TenantScopedModel, TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+    @property
+    def status(self) -> str:
+        """upcoming | active | closed — derived, so it can never disagree with the two flags it comes from."""
+        if self.is_current:
+            return "active"
+        return "closed" if self.is_archived else "upcoming"
 
 
 class Term(TenantScopedModel, TimeStampedModel):
@@ -728,3 +742,88 @@ class SubjectPrivateMessage(TenantScopedModel, TimeStampedModel):
         if self.sender.school_id != self.school_id:
             raise ValueError("SubjectPrivateMessage.sender must belong to the same school")
         super().save(*args, **kwargs)
+
+
+class StudentEnrollment(TenantScopedModel, TimeStampedModel):
+    """Which class (and section) a student belonged to in one academic year — the permanent history that
+    `Student.current_class/current_section/current_academic_year` (a pointer to *now*) cannot keep.
+
+    One row per student per year. A student's profile is never duplicated for a new year; a new year gets a new
+    enrolment row. Rows are never deleted by a rollover. `outcome` records what happened at the end of the year
+    (set when the year is rolled over); it stays blank while the year is in progress."""
+
+    class Source(models.TextChoices):
+        ADMISSION = "admission", "Admission"
+        ROLLOVER = "rollover", "Year rollover"
+        MANUAL = "manual", "Manual"
+        BACKFILL_CURRENT = "backfill_current", "Backfilled from the student's current class"
+        BACKFILL_PROMOTION = "backfill_promotion", "Backfilled from a promotion record"
+
+    class Outcome(models.TextChoices):
+        PROMOTED = "promoted", "Promoted"
+        REPEATED = "repeated", "Repeated"
+        GRADUATED = "graduated", "Graduated"
+        WITHDRAWN = "withdrawn", "Withdrawn"
+        TRANSFERRED = "transferred", "Transferred"
+
+    student = models.ForeignKey("students.Student", on_delete=models.CASCADE, related_name="enrollments")
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.PROTECT, related_name="enrollments")
+    school_class = models.ForeignKey(SchoolClass, on_delete=models.PROTECT, related_name="enrollments")
+    section = models.ForeignKey(Section, null=True, blank=True, on_delete=models.SET_NULL, related_name="enrollments")
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.MANUAL)
+    outcome = models.CharField(max_length=15, choices=Outcome.choices, blank=True)
+
+    class Meta:
+        db_table = "student_enrollments"
+        ordering = ["-academic_year__start_date", "student__last_name"]
+        constraints = [
+            models.UniqueConstraint(fields=["student", "academic_year"], name="one_enrollment_per_student_per_year"),
+        ]
+        indexes = [models.Index(fields=["academic_year", "school_class"])]
+
+    def __str__(self):
+        return f"{self.student} - {self.academic_year} - {self.school_class}"
+
+    def save(self, *args, **kwargs):
+        for name in ("student", "academic_year", "school_class"):
+            if getattr(self, name).school_id != self.school_id:
+                raise ValueError(f"StudentEnrollment.{name} must belong to the same school")
+        if self.section_id:
+            if self.section.school_id != self.school_id:
+                raise ValueError("StudentEnrollment.section must belong to the same school")
+            if self.section.academic_year_id != self.academic_year_id:
+                raise ValueError("StudentEnrollment.section must belong to the enrolment's academic year")
+            if self.section.school_class_id != self.school_class_id:
+                raise ValueError("StudentEnrollment.section must belong to the enrolment's class")
+        super().save(*args, **kwargs)
+
+
+class RolloverRun(TenantScopedModel, TimeStampedModel):
+    """One year-end rollover from `source_year` into `target_year`. There is at most one per pair, so a retried or
+    double-clicked request finds the same row instead of creating a second set of enrolments; a completed run is never
+    executed again. `summary` holds the completion report; `error` the (sanitised) reason a run failed."""
+
+    class Status(models.TextChoices):
+        RUNNING = "running", "Running"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
+    source_year = models.ForeignKey(AcademicYear, on_delete=models.PROTECT, related_name="+")
+    target_year = models.ForeignKey(AcademicYear, on_delete=models.PROTECT, related_name="+")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.RUNNING)
+    options = models.JSONField(default=dict, blank=True)
+    summary = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True)
+    started_by = models.ForeignKey("users.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "academic_year_rollovers"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["source_year", "target_year"], name="one_rollover_per_year_pair"),
+            models.CheckConstraint(condition=~models.Q(source_year=models.F("target_year")), name="rollover_years_differ"),
+        ]
+
+    def __str__(self):
+        return f"{self.source_year} -> {self.target_year} ({self.status})"
