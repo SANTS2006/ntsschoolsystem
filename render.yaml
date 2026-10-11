@@ -80,6 +80,12 @@ services:
         sync: false
       - key: BREVO_SENDER_NAME
         value: NTS School System
+      # Browser push alerts (real-time notifications). Generate once with:  python manage.py generate_vapid_keys
+      # Paste both values here; keep the private key secret. Without them, alerts are simply off.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
       - key: DAILY_API_KEY
         sync: false
       - key: SENTRY_DSN

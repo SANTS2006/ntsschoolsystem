@@ -1,8 +1,15 @@
 from django.utils import timezone
 
+from apps.common.background import run_in_background
 from apps.common.email import send_email
 
 from .models import Notification
+from .push import send_push_to_users
+
+
+def _app_path(school, path: str) -> str:
+    """A path inside the app as the browser must open it: school users live under their school's address."""
+    return f"/{school.slug}{path}" if school is not None else path
 
 
 def notify(
@@ -33,6 +40,7 @@ def notify(
         message=message,
         link=link,
     )
+    run_in_background("push notification", send_push_to_users, [recipient.pk], title, message, _app_path(recipient.school, f"/notifications/{notification.pk}"), str(notification.pk))
     if email_subject and email_html and recipient.email:
         send_email(
             to_email=recipient.email,
@@ -76,7 +84,9 @@ def notify_bulk(
         )
         for user in recipients
     ]
-    return Notification.objects.bulk_create(notifications)
+    created = Notification.objects.bulk_create(notifications)
+    run_in_background("push notifications", send_push_to_users, [u.pk for u in recipients], title, message, _app_path(school, "/notifications"), "")
+    return created
 
 
 def mark_read(notification: Notification) -> Notification:

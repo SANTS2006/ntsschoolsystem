@@ -9,10 +9,12 @@
  *    offline fallback (it's the same for every user and contains no data).
  *  - /assets/* (content-hashed by Vite, immutable): cache first.
  *  - Icons, manifest, logo: stale-while-revalidate.
+ *  - Push: shows a notification the moment the server sends one (even with the app closed) and tells any open tab to
+ *    refresh straight away. The payload is just the title/text/link of the notification; nothing is stored.
  *
  * Bump VERSION to drop every old cache on the next activation.
  */
-const VERSION = "v3";
+const VERSION = "v4";
 const SHELL_CACHE = `nts-shell-${VERSION}`;
 const ASSET_CACHE = `nts-assets-${VERSION}`;
 const STATIC_CACHE = `nts-static-${VERSION}`;
@@ -132,4 +134,48 @@ self.addEventListener("fetch", (event) => {
   } else if (STATIC_URLS.includes(url.pathname) || url.pathname.startsWith("/icons/")) {
     event.respondWith(staleWhileRevalidate(request, STATIC_CACHE));
   }
+});
+
+// ---- Push notifications ----------------------------------------------------------------------------------------
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "NTS School System", body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      // Tell every open tab, so the bell, lists and toast update instantly instead of waiting for the next check.
+      for (const client of windows) client.postMessage({ type: "nts-push", title: data.title, body: data.body, url: data.url });
+      // If someone is looking at the app right now, the in-app toast is enough; otherwise show a system notification.
+      if (windows.some((client) => client.visibilityState === "visible" && client.focused)) return;
+      await self.registration.showNotification(data.title || "NTS School System", {
+        body: data.body || "",
+        icon: "/icons/icon-192.png",
+        badge: "/icons/favicon-48.png",
+        tag: data.tag || undefined,
+        data: { url: data.url || "/notifications" },
+      });
+    })(),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/notifications";
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of windows) {
+        if (new URL(client.url).origin === self.location.origin && "focus" in client) {
+          await client.focus();
+          if ("navigate" in client) await client.navigate(url).catch(() => undefined);
+          return;
+        }
+      }
+      await self.clients.openWindow(url);
+    })(),
+  );
 });

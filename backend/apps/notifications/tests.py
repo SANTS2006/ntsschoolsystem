@@ -119,3 +119,113 @@ class TestNotificationDetails:
         _login(api_client, me)
 
         assert api_client.get(f"/api/v1/notifications/{theirs.id}/").status_code == 404
+
+
+class TestWebPush:
+    def test_subscribe_replaces_and_unsubscribe_removes(self, api_client):
+        from .models import PushSubscription
+
+        school = SchoolFactory()
+        me = UserFactory(school=school)
+        other = UserFactory(school=school)
+        body = {"endpoint": "https://push.example/abc", "p256dh": "key", "auth": "secret"}
+        _login(api_client, me)
+        assert api_client.post("/api/v1/notifications/push/subscription/", body, format="json").status_code == 200
+        assert PushSubscription.objects.get().user_id == me.pk
+
+        # The same browser signing in as someone else is re-pointed at them, not duplicated.
+        api_client.post("/api/v1/auth/logout/")
+        _login(api_client, other)
+        api_client.post("/api/v1/notifications/push/subscription/", body, format="json")
+        assert PushSubscription.objects.get().user_id == other.pk
+
+        api_client.delete("/api/v1/notifications/push/subscription/", {"endpoint": body["endpoint"]}, format="json")
+        assert PushSubscription.objects.count() == 0
+
+    def test_a_person_cannot_remove_someone_elses_subscription(self, api_client):
+        from .models import PushSubscription
+
+        school = SchoolFactory()
+        me = UserFactory(school=school)
+        other = UserFactory(school=school)
+        PushSubscription.objects.create(user=other, endpoint="https://push.example/zzz", p256dh="k", auth="a")
+        _login(api_client, me)
+        api_client.delete("/api/v1/notifications/push/subscription/", {"endpoint": "https://push.example/zzz"}, format="json")
+        assert PushSubscription.objects.count() == 1
+
+    def test_key_endpoint_reports_whether_push_is_on(self, api_client, settings):
+        school = SchoolFactory()
+        me = UserFactory(school=school)
+        _login(api_client, me)
+        settings.VAPID_PUBLIC_KEY, settings.VAPID_PRIVATE_KEY = "", ""
+        assert api_client.get("/api/v1/notifications/push/key/").data["enabled"] is False
+        settings.VAPID_PUBLIC_KEY, settings.VAPID_PRIVATE_KEY = "pub", "priv"
+        body = api_client.get("/api/v1/notifications/push/key/").data
+        assert body["enabled"] is True and body["public_key"] == "pub"
+
+    def test_push_requires_login(self, api_client):
+        assert api_client.get("/api/v1/notifications/push/key/").status_code in (401, 403)
+        assert api_client.post("/api/v1/notifications/push/subscription/", {}, format="json").status_code in (401, 403)
+
+    def test_creating_a_notification_pushes_to_the_recipients_devices(self, settings, monkeypatch):
+        from .models import PushSubscription
+
+        settings.BACKGROUND_TASKS_ASYNC = False
+        settings.VAPID_PUBLIC_KEY, settings.VAPID_PRIVATE_KEY = "pub", "priv"
+        school = SchoolFactory()
+        me = UserFactory(school=school)
+        someone = UserFactory(school=school)
+        PushSubscription.objects.create(user=me, endpoint="https://push.example/1", p256dh="k", auth="a")
+        PushSubscription.objects.create(user=someone, endpoint="https://push.example/2", p256dh="k", auth="a")
+        sent = []
+        monkeypatch.setattr("apps.notifications.push._send_one", lambda sub, payload: sent.append((sub.endpoint, payload)))
+        notify(recipient=me, category="announcement", title="Results are out", message="Term 1 results published")
+        assert [endpoint for endpoint, _ in sent] == ["https://push.example/1"]
+        assert "Results are out" in sent[0][1]
+
+    def test_bulk_notifications_push_to_each_recipient(self, settings, monkeypatch):
+        from .models import PushSubscription
+
+        settings.BACKGROUND_TASKS_ASYNC = False
+        settings.VAPID_PUBLIC_KEY, settings.VAPID_PRIVATE_KEY = "pub", "priv"
+        school = SchoolFactory()
+        users = [UserFactory(school=school) for _ in range(3)]
+        for i, user in enumerate(users):
+            PushSubscription.objects.create(user=user, endpoint=f"https://push.example/{i}", p256dh="k", auth="a")
+        sent = []
+        monkeypatch.setattr("apps.notifications.push._send_one", lambda sub, payload: sent.append(sub.endpoint))
+        notify_bulk(recipients=users, category="announcement", title="Assembly", message="Tomorrow 8am")
+        assert sorted(sent) == [f"https://push.example/{i}" for i in range(3)]
+
+    def test_nothing_is_sent_when_push_is_not_configured(self, settings, monkeypatch):
+        from .models import PushSubscription
+
+        settings.BACKGROUND_TASKS_ASYNC = False
+        settings.VAPID_PUBLIC_KEY, settings.VAPID_PRIVATE_KEY = "", ""
+        school = SchoolFactory()
+        me = UserFactory(school=school)
+        PushSubscription.objects.create(user=me, endpoint="https://push.example/1", p256dh="k", auth="a")
+        sent = []
+        monkeypatch.setattr("apps.notifications.push._send_one", lambda sub, payload: sent.append(1))
+        notify(recipient=me, category="x", title="t", message="m")
+        assert sent == []
+
+    def test_a_failing_device_does_not_stop_the_rest_or_the_notification(self, settings, monkeypatch):
+        from .models import PushSubscription
+
+        settings.BACKGROUND_TASKS_ASYNC = False
+        settings.VAPID_PUBLIC_KEY, settings.VAPID_PRIVATE_KEY = "pub", "priv"
+        school = SchoolFactory()
+        me = UserFactory(school=school)
+        for i in range(2):
+            PushSubscription.objects.create(user=me, endpoint=f"https://push.example/{i}", p256dh="k", auth="a")
+        calls = []
+
+        def flaky(sub, payload):
+            calls.append(sub.endpoint)
+            if len(calls) == 1:
+                raise RuntimeError("push service down")
+
+        monkeypatch.setattr("apps.notifications.push._send_one", flaky)
+        notification = notify(recipient=me, category="x", title="t", message="m")
+        assert len(calls) == 2 and Notification.unscoped_objects.filter(pk=notification.pk).exists()

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useToast } from "@/components/ui/toastContext";
 
 import { fetchNotifications } from "./api";
+import { currentPushState, enablePush, fetchPushConfig, pushWanted } from "./push";
 import { useUnreadCount } from "./useNotificationsCrud";
 
 /** Watches for new notifications while someone is signed in. When one arrives it pops up as a toast and every query on
@@ -28,6 +29,28 @@ export function LiveUpdates() {
       })
       .catch(() => undefined);
   }, [count, queryClient, showToast]);
+
+  // A push message arrives the moment a notification is created: refresh everything and show the toast right away, rather
+  // than waiting for the next check. (The unread-count check above stays as the fallback when push is off or blocked.)
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type !== "nts-push") return;
+      void queryClient.invalidateQueries();
+      if (event.data.title) showToast({ title: event.data.title, description: event.data.body });
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [queryClient, showToast]);
+
+  // Signing in again on a browser where this person already allowed alerts switches them back on without asking.
+  useEffect(() => {
+    if (!pushWanted()) return;
+    (async () => {
+      const [state, config] = await Promise.all([currentPushState(), fetchPushConfig().catch(() => null)]);
+      if (config?.enabled && state === "off" && Notification.permission === "granted") await enablePush();
+    })().catch(() => undefined);
+  }, []);
 
   return null;
 }

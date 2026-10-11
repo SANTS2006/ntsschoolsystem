@@ -84,3 +84,20 @@ exceptions return a generic message — never a stack trace. Browser crashes are
 Prefer additive, backwards-compatible migrations (add nullable/defaulted columns first, backfill, then tighten in a later
 deploy). Backups record the migration state; restore refuses a backup from a different schema, so **take a backup before
 deploying a migration that changes existing columns.**
+
+
+## 9. Real-time notifications (Web Push)
+
+A notification created anywhere in the system (`apps.notifications.services.notify` / `notify_bulk`) is also pushed to the
+recipient's subscribed browsers through the browser vendor's push service, so it arrives in seconds even when the app is
+closed. Nothing holds a connection open on our server (important on a small gunicorn instance). Open tabs are told by the
+service worker (`sw.js`) and refresh straight away; the bell's polling remains the fallback.
+
+**Set-up (once):** run `python manage.py generate_vapid_keys` (in `backend/`), then set `VAPID_PUBLIC_KEY` and
+`VAPID_PRIVATE_KEY` in Render. Keep the private key secret and do not change it later, or every device must re-subscribe.
+Optional: `VAPID_SUBJECT` (default `mailto:hello@ntsdigitalsolutions.com`). Without the keys push is off and the bell hides
+its "Get alerts on this device" row.
+
+**Using it:** each person opens the bell and chooses *Turn on* (the browser then asks permission). Alerts are removed from
+the device when the person signs out, and switched back on at the next sign-in on that browser. iPhones only support push
+for the app added to the home screen. Dead subscriptions (HTTP 404/410 from the push service) are deleted automatically.

@@ -1,6 +1,8 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { disablePush } from "@/features/notifications/push";
+
 import { setSignOutState } from "./signOutStore";
 import { useLogout } from "./useAuth";
 
@@ -20,6 +22,8 @@ export function useSignOut() {
     async (options: { message?: string; reason?: "idle" } = {}) => {
       const started = Date.now();
       setSignOutState({ phase: "working", message: options.message ?? "Signing you out securely…" });
+      // Stop alerts for this person on this device first (while still signed in), so the next person to use it is not sent theirs.
+      await disablePush({ remember: false }).catch(() => undefined);
       try {
         await logout.mutateAsync();
       } catch {

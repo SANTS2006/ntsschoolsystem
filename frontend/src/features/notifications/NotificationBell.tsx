@@ -7,6 +7,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { cn } from "@/lib/cn";
 
 import { categoryLabel } from "./priorityTone";
+import { PushToggle } from "./PushToggle";
 import type { Notification } from "./types";
 import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotificationList, useUnreadCount } from "./useNotificationsCrud";
 
@@ -127,6 +128,7 @@ export function NotificationBell() {
               )}
             </div>
 
+            <PushToggle />
             <button
               type="button"
               onClick={() => {

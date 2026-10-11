@@ -287,6 +287,11 @@ BREVO_API_KEY = env("BREVO_API_KEY")
 BREVO_SENDER_EMAIL = env("BREVO_SENDER_EMAIL", "no-reply@example.com")
 BREVO_SENDER_NAME = env("BREVO_SENDER_NAME", "School Management Platform")
 # Where website demo requests and contact messages are e-mailed (they are always stored in the database as well).
+# Web Push (browser alerts). Generate a pair once (see docs/OPERATIONS.md) and keep the private key secret; without them
+# push is simply off and the in-app bell still works.
+VAPID_PUBLIC_KEY = env("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = env("VAPID_PRIVATE_KEY", "")
+VAPID_SUBJECT = env("VAPID_SUBJECT", "mailto:hello@ntsdigitalsolutions.com")
 ENQUIRY_NOTIFY_EMAIL = env("ENQUIRY_NOTIFY_EMAIL", "hello@ntsdigitalsolutions.com")
 
 # ---------------------------------------------------------------------------
