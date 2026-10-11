@@ -475,7 +475,7 @@ class TestApplicationFormBuilder:
         _login(api_client, admin)
         response = api_client.get("/api/v1/admissions/form-config/")
         assert response.status_code == 200
-        assert response.data["apply_url"].endswith(f"/apply/{school.slug}")
+        assert response.data["apply_url"].endswith(f"/{school.slug}/apply")
 
 
 class TestAcceptanceNumbersAndGuardian:

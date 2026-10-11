@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 
 from apps.academics.models import Section, Subject
-from apps.academics.services import assert_year_not_archived
+from apps.academics.services import assert_year_is_active, assert_year_not_archived
 from apps.authorization.permissions import require_permission
 from apps.common.views import TenantScopedAPIView, TenantScopedModelViewSet
 from apps.parents.services import notify_student_guardians
@@ -88,6 +88,7 @@ class StudentAttendanceViewSet(TenantScopedModelViewSet):
         subject = get_object_or_404(Subject, pk=data["subject"], school=school)
         try:
             assert_year_not_archived(section.academic_year)
+            assert_year_is_active(section.academic_year, "Taking attendance")
         except ValueError as exc:
             raise ValidationError(str(exc)) from exc
 

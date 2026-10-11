@@ -2,6 +2,8 @@ import { Archive, CheckCircle2, Plus, Search, Users } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { YearSelect } from "@/features/academics/YearSelect";
+
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -58,7 +60,8 @@ export function StudentsListPage() {
   const [status, setStatus] = useState<StudentStatus | "">("");
   const debouncedSearch = useDebounce(search);
 
-  const filterParams = { search: debouncedSearch || undefined, status: status || undefined };
+  const [viewYear, setViewYear] = useState("");
+  const filterParams = { search: debouncedSearch || undefined, status: status || undefined, academic_year: viewYear || undefined };
   const { data, isLoading, isError, error, isFetching } = useStudents({
     page,
     page_size: PAGE_SIZE,
@@ -124,6 +127,8 @@ export function StudentsListPage() {
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">Manage your school's student records.</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* A viewing year only: it changes this list, never the school's active year. */}
+          <YearSelect value={viewYear} onChange={(id) => { setViewYear(id); setPage(1); }} label="View year" allLabel="Current students" />
           <ExportCsvButton path="/students/" params={filterParams} filename="students.csv" />
           {canCreate && (
             <Button onClick={() => navigate("/students/new")}>

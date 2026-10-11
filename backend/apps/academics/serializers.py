@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import Max
 from rest_framework import serializers
 
@@ -64,7 +65,28 @@ class TermSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         academic_year = attrs.get("academic_year", getattr(self.instance, "academic_year", None))
         _reject_if_year_archived(academic_year)
+        if attrs.get("is_current") and academic_year is not None and not academic_year.is_current:
+            raise serializers.ValidationError({"is_current": "A term can only be the current term of the active academic year."})
         return attrs
+
+    def _clear_other_current_terms(self, school_id, keep_pk=None):
+        # One current term per school: choosing one clears the flag on the others first (the database enforces the same).
+        others = Term.objects.filter(school_id=school_id, is_current=True)
+        if keep_pk is not None:
+            others = others.exclude(pk=keep_pk)
+        others.update(is_current=False)
+
+    def create(self, validated_data):
+        with transaction.atomic():
+            if validated_data.get("is_current"):
+                self._clear_other_current_terms(self.context["request"].user.school_id)
+            return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        with transaction.atomic():
+            if validated_data.get("is_current"):
+                self._clear_other_current_terms(instance.school_id, keep_pk=instance.pk)
+            return super().update(instance, validated_data)
 
     # `unique_term_sequence_per_year` needs no explicit validate() here, unlike the
     # school-name-uniqueness gap documented elsewhere in this codebase (Timetable's Room/Period,
@@ -216,6 +238,8 @@ class AssessmentSerializer(serializers.ModelSerializer):
         discretionary_weight = attrs.get(
             "discretionary_weight", getattr(self.instance, "discretionary_weight", 0)
         )
+        if subject_offering is not None:
+            _reject_if_year_archived(subject_offering.academic_year)
         if self.instance is not None:
             if self.instance.subject_offering.ca_status == SubjectOffering.CAStatus.CLOSED:
                 raise serializers.ValidationError("CA is closed for this subject — reopen it to edit assessments.")

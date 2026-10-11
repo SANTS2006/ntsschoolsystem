@@ -38,6 +38,14 @@ def assert_year_not_archived(academic_year: AcademicYear | None) -> None:
         raise ValueError(f'"{academic_year.name}" is archived; its records are read-only.')
 
 
+def assert_year_is_active(academic_year: AcademicYear | None, what: str = "This") -> None:
+    """For day-to-day operations that only make sense in the school's running year (taking attendance): the year must be
+    the active one. An upcoming year is for preparing configuration; a closed year is history. Same ValueError convention
+    as `assert_year_not_archived`."""
+    if academic_year is not None and not academic_year.is_current:
+        raise ValueError(f'{what} can only be done in the active academic year; "{academic_year.name}" is {academic_year.status}.')
+
+
 def archive_academic_year(academic_year: AcademicYear, *, actor) -> AcademicYear:
     """Marks a year read-only for every year-scoped write path (see assert_year_not_archived).
     Refuses to archive the currently-current year — switch which year is current first, so a
@@ -133,6 +141,7 @@ def save_assessment_scores(assessment: Assessment, *, entries: list[dict], submi
     alerting anyone. Raises ValueError (caught by the view and turned into a 400) if the offering's
     CA is already closed, or if a score is negative or exceeds the assessment's max_score."""
     subject_offering = assessment.subject_offering
+    assert_year_not_archived(subject_offering.academic_year)
     if subject_offering.ca_status == SubjectOffering.CAStatus.CLOSED:
         raise ValueError("CA is closed for this subject offering; scores can no longer be modified.")
 
@@ -328,6 +337,7 @@ def enter_subject_exam_score(subject_offering: SubjectOffering, *, student, exam
     """Admin/Exams-Director entry point for the exam-portion score — never a teacher (enforced in
     the view, not here). Raises ValueError for an out-of-range score, caught by the view and
     turned into a clean 400 rather than surfacing the model's own CheckConstraint as a 500."""
+    assert_year_not_archived(subject_offering.academic_year)
     if exam_score is not None:
         if exam_score < 0:
             raise ValueError(f"{student.full_name}'s exam score cannot be negative.")

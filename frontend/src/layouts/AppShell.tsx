@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
 import { PageOutlet } from "@/components/ErrorBoundary";
+import { YearBadge } from "@/features/academics/YearBadge";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { FullPageSpinner } from "@/components/ui/Spinner";
@@ -307,6 +308,7 @@ export function AppShell() {
             </span>
           </div>
           <div className="flex flex-1 items-center justify-end gap-2 sm:gap-4">
+            <YearBadge />
             <ThemeToggle />
             <NotificationBell />
             <UserMenu />

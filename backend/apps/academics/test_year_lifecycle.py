@@ -429,6 +429,17 @@ class TestClosedYears:
         old_offerings = api_client.get(f"{API}/subject-offerings/", {"academic_year": str(world["y1"].pk)})
         assert old_offerings.status_code == 200 and old_offerings.data["count"] == 1
 
+    def test_marks_and_continuous_assessment_of_a_closed_year_cannot_be_changed(self, api_client, world):
+        from . import services
+        from tests.factories import AssessmentFactory
+
+        assessment = AssessmentFactory(school=world["school"], subject_offering=world["offering"])
+        self._roll(api_client, world)
+        with pytest.raises(ValueError, match="archived"):
+            services.enter_subject_exam_score(world["offering"], student=world["pass_student"], exam_score=Decimal("50"), entered_by=world["principal"])
+        with pytest.raises(ValueError, match="archived"):
+            services.save_assessment_scores(assessment, entries=[{"student": world["pass_student"], "raw_score": Decimal("10")}], submit=False)
+
     def test_a_correction_goes_through_the_audited_unarchive(self, api_client, world):
         self._roll(api_client, world)
         assert api_client.post(f"{API}/academic-years/{world['y1'].pk}/unarchive/").status_code == 200
@@ -575,3 +586,37 @@ class TestBackfill:
         count = StudentEnrollment.unscoped_objects.count()
         self._backfill()
         assert StudentEnrollment.unscoped_objects.count() == count == 3
+
+
+# ---- operational writes belong to the active year; one current term ----------------------------------------------------------
+
+class TestActiveYearOperations:
+    def _attendance_body(self, world, section, student):
+        from apps.attendance.models import StudentAttendance  # noqa: F401 - imported to fail loudly if the app moves
+
+        return {"student": str(student.pk), "date": "2026-10-01", "status": "present", "section": str(section.pk)}
+
+    def test_attendance_is_only_taken_in_the_active_year(self, api_client, world):
+        _login(api_client, _staff(world["school"], "teacher"))
+        upcoming_section = SectionFactory(school=world["school"], school_class=world["g1"], academic_year=world["y2"], name="B")
+        in_upcoming = api_client.post("/api/v1/attendance/students/", self._attendance_body(world, upcoming_section, world["pass_student"]), format="json")
+        assert in_upcoming.status_code == 400 and "active academic year" in str(in_upcoming.data)
+        in_active = api_client.post("/api/v1/attendance/students/", self._attendance_body(world, world["s1a"], world["pass_student"]), format="json")
+        assert in_active.status_code == 201, in_active.data
+
+    def test_only_one_term_can_be_current_and_only_in_the_active_year(self, api_client, world):
+        _login(api_client, world["principal"])
+        second = api_client.post(
+            f"{API}/terms/",
+            {"academic_year": str(world["y1"].pk), "name": "Term 2", "sequence": 2, "start_date": "2027-01-10", "end_date": "2027-04-01", "is_current": True},
+            format="json",
+        )
+        assert second.status_code == 201, second.data
+        assert Term.unscoped_objects.get(pk=world["t1"].pk).is_current is False
+        assert Term.unscoped_objects.filter(school=world["school"], is_current=True).count() == 1
+        in_upcoming = api_client.patch(f"{API}/terms/{world['t2'].pk}/", {"is_current": True}, format="json")
+        assert in_upcoming.status_code == 400
+
+    def test_the_database_refuses_two_current_terms(self, world):
+        with pytest.raises(IntegrityError), transaction.atomic():
+            Term.unscoped_objects.filter(pk=world["t2"].pk).update(is_current=True)

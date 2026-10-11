@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.academics.services import assert_year_not_archived
+from apps.academics.services import assert_year_is_active, assert_year_not_archived
 
 from .models import StaffAttendance, StudentAttendance
 
@@ -68,6 +68,7 @@ class StudentAttendanceSerializer(serializers.ModelSerializer):
         if section is not None:
             try:
                 assert_year_not_archived(section.academic_year)
+                assert_year_is_active(section.academic_year, "Taking attendance")
             except ValueError as exc:
                 raise serializers.ValidationError({"section": str(exc)}) from exc
 

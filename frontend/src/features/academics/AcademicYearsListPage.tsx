@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, CalendarRange, CheckCircle2, Plus, Search, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, CalendarRange, CheckCircle2, Play, Plus, Repeat, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -29,6 +29,7 @@ import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
 import { useAcademicYearList, useArchiveAcademicYear, useDeleteAcademicYear, useUnarchiveAcademicYear } from "./useAcademicsCrud";
+import { useActivateYear } from "./useYearContext";
 
 const PAGE_SIZE = 25;
 
@@ -57,6 +58,7 @@ export function AcademicYearsListPage() {
   const deleteAcademicYear = useDeleteAcademicYear();
   const archiveAcademicYear = useArchiveAcademicYear();
   const unarchiveAcademicYear = useUnarchiveAcademicYear();
+  const activateYear = useActivateYear();
 
   const handleDelete = async (id: string, name: string) => {
     const ok = await confirm({
@@ -68,6 +70,18 @@ export function AcademicYearsListPage() {
     deleteAcademicYear.mutate(id, {
       onSuccess: () => showToast({ title: `"${name}" deleted` }),
       onError: (err) => showToast({ title: "Failed to delete", description: err.message, tone: "danger" }),
+    });
+  };
+
+  const handleActivate = async (id: string, name: string) => {
+    const ok = await confirm({
+      title: `Make "${name}" the active academic year?`,
+      description: "The current year is closed (read-only) and everyone starts working in this one. Run the rollover first so students and settings are carried over.",
+    });
+    if (!ok) return;
+    activateYear.mutate(id, {
+      onSuccess: () => showToast({ title: `"${name}" is now the active academic year` }),
+      onError: (err) => showToast({ title: "Could not activate", description: err.message, tone: "danger" }),
     });
   };
 
@@ -118,6 +132,12 @@ export function AcademicYearsListPage() {
         </div>
         <div className="flex items-center gap-2">
           <ExportCsvButton path="/academics/academic-years/" params={filterParams} filename="academic_years.csv" />
+          {canUpdate && (
+            <Button variant="secondary" onClick={() => navigate("/academics/years/rollover")}>
+              <Repeat className="size-4" aria-hidden="true" />
+              Year rollover
+            </Button>
+          )}
           {canCreate && (
             <Button onClick={() => navigate("/academics/years/new")}>
               <Plus className="size-4" aria-hidden="true" />
@@ -154,14 +174,29 @@ export function AcademicYearsListPage() {
                   <TableCell>{year.end_date}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1.5">
-                      {year.is_current ? <Badge tone="primary">Current</Badge> : <Badge>Inactive</Badge>}
-                      {year.is_archived && <Badge tone="warning">Archived</Badge>}
+                      {year.status === "active" && <Badge tone="primary">Active</Badge>}
+                      {year.status === "upcoming" && <Badge>Upcoming</Badge>}
+                      {year.status === "closed" && <Badge tone="warning">Closed</Badge>}
                     </div>
                   </TableCell>
                   {(canUpdate || canDelete) && (
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        {canUpdate && !year.is_archived && (
+                        {canUpdate && year.status === "upcoming" && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleActivate(year.id, year.name);
+                            }}
+                            aria-label={`Make ${year.name} the active year`}
+                            title="Make this the active year"
+                            className="rounded p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-success)]"
+                          >
+                            <Play className="size-4" aria-hidden="true" />
+                          </button>
+                        )}
+                        {canUpdate && !year.is_archived && !year.is_current && (
                           <button
                             type="button"
                             onClick={(e) => {

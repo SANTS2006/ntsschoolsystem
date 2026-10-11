@@ -8,7 +8,6 @@ import { z } from "zod";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Checkbox } from "@/components/ui/Checkbox";
 import { Input } from "@/components/ui/Input";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/toastContext";
@@ -20,12 +19,11 @@ const schema = z.object({
   name: z.string().min(1, "Name is required"),
   start_date: z.string().min(1, "Start date is required"),
   end_date: z.string().min(1, "End date is required"),
-  is_current: z.boolean(),
 });
 
 type FormValues = z.infer<typeof schema>;
 
-const EMPTY_VALUES: FormValues = { name: "", start_date: "", end_date: "", is_current: false };
+const EMPTY_VALUES: FormValues = { name: "", start_date: "", end_date: "" };
 
 export function AcademicYearFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -47,7 +45,7 @@ export function AcademicYearFormPage() {
 
   useEffect(() => {
     if (year) {
-      reset({ name: year.name, start_date: year.start_date, end_date: year.end_date, is_current: year.is_current });
+      reset({ name: year.name, start_date: year.start_date, end_date: year.end_date });
     }
   }, [year, reset]);
 
@@ -89,11 +87,9 @@ export function AcademicYearFormPage() {
               <Input type="date" label="Start date" error={errors.start_date?.message} {...register("start_date")} />
               <Input type="date" label="End date" error={errors.end_date?.message} {...register("end_date")} />
             </div>
-            <Checkbox
-              label="Current academic year"
-              hint="Marks this as the school's active academic year."
-              {...register("is_current")}
-            />
+            <p className="text-sm text-[var(--color-text-muted)]">
+              A new year starts as <strong>upcoming</strong>. To make it the active year, run the year rollover and then activate it from the academic years list.
+            </p>
 
             <div className="mt-2 flex justify-end gap-3">
               <Button type="button" variant="secondary" onClick={() => navigate("/academics/years")}>

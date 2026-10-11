@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from apps.academics.services import assert_year_not_archived
+
 from .models import Exam, ExamSchedule, GradeBoundary, GradingScale, Result
 
 
@@ -61,7 +63,13 @@ class ExamSerializer(serializers.ModelSerializer):
         return value
 
     def validate_term(self, value):
-        return self._same_school(value, "Term")
+        term = self._same_school(value, "Term")
+        # Exams of a closed (archived) year are history: no new or moved exams there.
+        try:
+            assert_year_not_archived(term.academic_year)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+        return term
 
     def validate_grading_scale(self, value):
         return self._same_school(value, "Grading scale")

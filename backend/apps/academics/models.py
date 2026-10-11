@@ -66,6 +66,7 @@ class Term(TenantScopedModel, TimeStampedModel):
             models.CheckConstraint(
                 condition=models.Q(end_date__gt=models.F("start_date")), name="term_end_after_start"
             ),
+            models.UniqueConstraint(fields=["school"], condition=models.Q(is_current=True), name="one_current_term_per_school"),
         ]
 
     def __str__(self):

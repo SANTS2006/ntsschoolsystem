@@ -6,6 +6,9 @@ export interface AcademicYear {
   is_current: boolean;
   is_archived: boolean;
   archived_at: string | null;
+  /** upcoming | active | closed — derived by the server from the two flags above. */
+  status: "upcoming" | "active" | "closed";
+  activated_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -14,7 +17,6 @@ export interface AcademicYearPayload {
   name: string;
   start_date: string;
   end_date: string;
-  is_current: boolean;
 }
 
 /** `sequence` is the explicit 1st/2nd/3rd ordering within the academic year — independent of

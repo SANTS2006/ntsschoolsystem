@@ -28,6 +28,7 @@ const ApplicationFormBuilderPage = lazyRetry(() => import("@/features/admissions
 const ApplicationsListPage = lazyRetry(() => import("@/features/admissions/ApplicationsListPage").then((m) => ({ default: m.ApplicationsListPage })));
 const PublicApplyPage = lazyRetry(() => import("@/features/admissions/PublicApplyPage").then((m) => ({ default: m.PublicApplyPage })));
 const AcademicYearFormPage = lazyRetry(() => import("@/features/academics/AcademicYearFormPage").then((m) => ({ default: m.AcademicYearFormPage })));
+const YearRolloverPage = lazyRetry(() => import("@/features/academics/YearRolloverPage").then((m) => ({ default: m.YearRolloverPage })));
 const AcademicYearsListPage = lazyRetry(() => import("@/features/academics/AcademicYearsListPage").then((m) => ({ default: m.AcademicYearsListPage })));
 const AcademicsLayout = lazyRetry(() => import("@/features/academics/AcademicsLayout").then((m) => ({ default: m.AcademicsLayout })));
 const DepartmentFormPage = lazyRetry(() => import("@/features/academics/DepartmentFormPage").then((m) => ({ default: m.DepartmentFormPage })));
@@ -499,6 +500,7 @@ export function AppRoutes() {
           <Route path="/academics" element={<AcademicsLayout />}>
             <Route index element={<Navigate to="years" replace />} />
             <Route path="years" element={<AcademicYearsListPage />} />
+            <Route path="years/rollover" element={<YearRolloverPage />} />
             <Route path="years/new" element={<FormModal list={<AcademicYearsListPage />}><AcademicYearFormPage /></FormModal>} />
             <Route path="years/:id/edit" element={<FormModal list={<AcademicYearsListPage />}><AcademicYearFormPage /></FormModal>} />
             <Route path="terms" element={<TermsListPage />} />
