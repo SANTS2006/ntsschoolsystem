@@ -143,6 +143,47 @@ class SchoolDeletionBlocked(Exception):
     """Raised when something still references the school in a way that must be removed by hand first."""
 
 
+def _purge(queryset, school, depth: int = 0) -> None:
+    """Deletes `queryset`; where a protected reference blocks it (a teacher's user is protected by their staff record, which is
+    protected by the subject offerings they teach, ...), deletes those blockers first, as long as they belong to this same school.
+    Bulk queryset deletes are used on purpose: they bypass append-only guards on individual rows (PromotionRecord) that exist
+    to stop edits through the app, not to stop a whole school being removed. Anything from another school aborts the run."""
+    from django.db.models import ProtectedError
+
+    for _ in range(25):
+        try:
+            queryset.delete()
+            return
+        except ProtectedError as exc:
+            if depth > 12:
+                raise
+            blockers = {}
+            for obj in exc.protected_objects:
+                owner = getattr(obj, "school_id", school.pk)
+                if owner != school.pk:
+                    raise
+                blockers.setdefault(type(obj), []).append(obj.pk)
+            for model, pks in blockers.items():
+                _purge(model._base_manager.filter(pk__in=pks), school, depth + 1)
+    raise ProtectedError("Could not clear the protected records of this school.", set())
+
+
+def _school_owned_models():
+    """Every model with a `school` foreign key that does not merely null itself when the school goes (the audit log does)."""
+    from django.apps import apps
+    from django.db import models as dj_models
+
+    found = []
+    for model in apps.get_models():
+        try:
+            field = model._meta.get_field("school")
+        except Exception:  # noqa: BLE001 - no such field
+            continue
+        if field.is_relation and field.related_model is School and field.remote_field.on_delete is not dj_models.SET_NULL:
+            found.append(model)
+    return found
+
+
 def delete_school(*, school: School, actor=None) -> None:
     """Permanently deletes a *suspended* school and everything it owns (people, academic, finance and other records).
 
@@ -159,7 +200,10 @@ def delete_school(*, school: School, actor=None) -> None:
     snapshot = {"name": school.name, "slug": school.slug, "id": str(school.pk)}
     try:
         with transaction.atomic():
-            User._base_manager.filter(school=school).delete()
+            _purge(User._base_manager.filter(school=school), school)
+            # Rows that protect the school (classes, years, fee categories, ...) go too; audit entries are kept (their link is cleared).
+            for model in _school_owned_models():
+                _purge(model._base_manager.filter(school=school), school)
             school.delete()
     except ProtectedError as exc:
         raise SchoolDeletionBlocked("Some of this school's records are still referenced elsewhere, so it could not be deleted.") from exc

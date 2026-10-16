@@ -51,6 +51,8 @@ def _enrolled_student(school, school_class):
     student = StudentFactory(school=school, current_class=school_class)
     student.user = UserFactory(school=school)
     student.save(update_fields=["user"])
+    # Every real student account carries this role from creation (apps.students.services.provision_student_account).
+    assign_role(user=student.user, role=Role.unscoped_objects.get(school=school, slug="student"))
     return student
 
 
@@ -206,7 +208,8 @@ class TestSubmitAssignment:
             f"/api/v1/assignments/{assignment.id}/submit/", {"attachment": file}, format="multipart"
         )
 
-        assert response.status_code == 400
+        # Work set for another class is not visible to this student at all (audience-only visibility), so it is "not found".
+        assert response.status_code == 404
 
     def test_rejects_disallowed_file_extension(self, api_client):
         school, _ = _principal()
@@ -291,12 +294,14 @@ class TestGradeSubmission:
 
 class TestAssignmentTenantIsolation:
     def test_cannot_list_another_schools_assignments(self, api_client):
-        school_a, principal_a = _principal()
+        school_a, _ = _principal()
         school_b, _ = _principal()
         AssignmentFactory(school=school_b)
-        assignment_a = AssignmentFactory(school=school_a)
+        # (The principal has no assignments access by design, and a teacher sees only the assignments they set.)
+        teacher_a = _teacher(school_a)
+        assignment_a = AssignmentFactory(school=school_a, teacher=teacher_a)
 
-        _login(api_client, principal_a)
+        _login(api_client, teacher_a.user)
         response = api_client.get("/api/v1/assignments/")
 
         assert response.status_code == 200

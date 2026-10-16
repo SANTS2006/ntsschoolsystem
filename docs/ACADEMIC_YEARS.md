@@ -25,13 +25,17 @@ codes (`academics.update` …) checked by `require_permission`; roles are per sc
 | Year in the UI | list/form pages only | No global indicator; no historical viewing selector; "current" was a checkbox. |
 | Hard-coded years | whole repo | **None found** (`grep` for `20xx/20xx`: only a docstring example). |
 
-**Defects found and fixed along the way**
+**Defects found and fixed along the way** (first pass, then the full check-up that followed)
 1. No single-active-year guarantee (now a database constraint + guarded activation).
 2. Same for terms (constraint + serializer rule). A real bug in my first version of this rule was caught by a test: inserting the new current term before clearing the old one violated the new constraint.
 3. `?academic_year=<garbage>` would have raised a 500 (invalid UUID) in my first resolver; fixed and covered by a test.
 4. `Student.save()` computed "is this a new student" after saving; fixed (caught by a test).
 5. Closed-year writes to marks / CA / exams were possible; now rejected (section 4).
 6. The legacy promotion tools could leave a student with no class and did not record history; they now also write enrolments.
+7. *(check-up)* **Deleting a school failed for any school with real data** (my earlier "delete a suspended school" feature): classes, years, fee categories and staff protect the school/user rows, so only an almost-empty school could be deleted. The platform delete now clears protected blockers school by school (inside one transaction, aborting on anything from another school) and keeps the audit trail. Covered by a test with years, enrolments, a rollover run and staff.
+8. *(check-up)* **Any year could be deleted from the list**, including the active year or a year with invoices (invoices are `ON DELETE CASCADE` from the year, so their payments would have gone too). Now refused (409) unless the year is unused.
+9. *(check-up)* **Rollover race:** two simultaneous runs could both pass the "already completed?" check and a late failure could overwrite a completed run's status. The whole run (lock, check, work, completion) is now one locked transaction; failures are recorded afterwards and never downgrade a completed run.
+10. *(check-up)* Stale tests that no longer matched deliberate product rules (principal is view-only for inventory; student accounts carry the student role; teachers see only assignments they set; system roles are deletable; teachers may view documents; school apply link is `/<slug>/apply`) were corrected so the suite reflects the product again.
 
 ## 2. Data model
 
@@ -73,6 +77,7 @@ filters; see section 11.
 | Prepare configuration (sections, offerings, terms, fee plans, timetables) | active **or upcoming** year; never closed | `assert_year_not_archived` |
 | Modify/delete in a **closed** year | rejected for ordinary writes: sections, terms, offerings, attendance, timetable, fee plans, invoices **and now CA scores, exam scores, assessments and exams** | `assert_year_not_archived` at service + serializer choke points |
 | Correct a closed year | explicit, audited: `unarchive` (needs `academics.update`), correct, re-archive | `academics.year_unarchived` audit entry |
+| Delete a year | refused for the active year and for any year that has enrolments, rollover history, promotion records, invoices, fee plans or offerings (deleting such a year would cascade away invoices and payments); only an unused year can go | `year_services.deletion_blocker` → HTTP 409 |
 | Payments / refunds on old invoices | **allowed** (arrears must stay collectable); only creating/editing invoices and fee plans in a closed year is blocked | unchanged finance rules |
 | Rollover, activation | `academics.update` only | `year_views`, tests for teacher/student/accountant/outsider |
 
@@ -145,10 +150,10 @@ Legend — **Updated**: changed here · **Compatible**: read and judged correct,
 
 ## 9. Tests
 
-`backend/apps/academics/test_year_lifecycle.py` — 51 tests: single-active-year (DB), read-only `is_current`, context endpoint (own years only, no active year, platform admin),
+`backend/apps/academics/test_year_lifecycle.py` — 55 tests, `test_year_migration.py` — 1 test (the migrations run against data made under the old schema), and `frontend/src/features/academics/yearUi.test.tsx` — 8 tests: single-active-year (DB), read-only `is_current`, context endpoint (own years only, no active year, platform admin),
 preview (writes nothing, pass-mark proposals, bad pairs, missing terms), rollover (progression, sections, history, copy rules, **old money/marks untouched**, idempotency, blocking on undecided,
 atomic failure, skip already-enrolled, withdraw/transfer, class override, foreign class), activation (needs rollover/terms, swap + archive + audit, repeat, first-year, locked), closed-year writes, access (teacher/student/accountant/other school),
-historical views, enrolment sync, legacy promotion tools, the migration backfill (and its idempotency), attendance only in the active year, one current term.
+historical views, enrolment sync, legacy promotion tools, the migration backfill (and its idempotency), attendance only in the active year, one current term, year-deletion protection and a full end-to-end workflow (2026/2027 → 2027/2028, seen by principal, teacher, accountant, student and an outsider).
 See section 10 for the results that were actually obtained and where.
 
 ## 10. Results of the runs (filled in from real runs — see the delivery notes below)

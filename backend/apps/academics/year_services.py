@@ -19,7 +19,7 @@ from collections import Counter
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
@@ -94,6 +94,27 @@ def year_context(school) -> dict:
         "current_term": {"id": str(term.pk), "name": term.name} if term else None,
         "years": [year_summary(y) for y in years],
     }
+
+
+def deletion_blocker(year: AcademicYear) -> str | None:
+    """Why this year must not be deleted, or None. A year owns invoices (and through them payments) with ON DELETE CASCADE, plus
+    enrolments and rollover history, so deleting one that was ever used would silently destroy records. Only an unused year
+    (a mistake, a placeholder) may go."""
+    from apps.finance.models import FeeStructure, Invoice
+
+    if year.is_current:
+        return "This is the active academic year. Activate another year first (and then close this one)."
+    if StudentEnrollment.unscoped_objects.filter(academic_year=year).exists():
+        return "Students were enrolled in this year, so it is part of the school's history and cannot be deleted."
+    if RolloverRun.unscoped_objects.filter(source_year=year).exists() or RolloverRun.unscoped_objects.filter(target_year=year).exists():
+        return "This year took part in a rollover, so it cannot be deleted."
+    if Invoice.unscoped_objects.filter(academic_year=year).exists():
+        return "Invoices exist for this year, so it cannot be deleted. Its financial records must be kept."
+    if PromotionRecord.unscoped_objects.filter(previous_academic_year=year).exists():
+        return "Promotion records refer to this year, so it cannot be deleted."
+    if FeeStructure.unscoped_objects.filter(academic_year=year).exists() or SubjectOffering.unscoped_objects.filter(academic_year=year).exists():
+        return "Fee plans or subject offerings exist for this year. Remove them first if this year really was a mistake."
+    return None
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -445,78 +466,25 @@ def execute_rollover(source: AcademicYear, target: AcademicYear, *, actor, decis
     _check_years(source, target)
     school = source.school
 
-    with transaction.atomic():
-        # Lock both years so two rollovers (or a rollover and an activation) cannot interleave.
-        list(AcademicYear.unscoped_objects.select_for_update().filter(pk__in=[source.pk, target.pk]))
-        try:
-            with transaction.atomic():
-                run, _ = RolloverRun.unscoped_objects.get_or_create(
-                    school=school, source_year=source, target_year=target, defaults={"started_by": actor, "options": options}
-                )
-        except IntegrityError:
-            run = RolloverRun.unscoped_objects.get(school=school, source_year=source, target_year=target)
-        if run.status == RolloverRun.Status.COMPLETED:
-            return run  # a retried request: nothing to do, the original report stands
-        run.status = RolloverRun.Status.RUNNING
-        run.options = options
-        run.error = ""
-        run.started_by = actor
-        run.save(update_fields=["status", "options", "error", "started_by", "updated_at"])
-
     try:
         with transaction.atomic():
-            report = {"outcomes": Counter(), "students_without_section": 0, "skipped_already_enrolled": 0}
-            classes = {str(c.pk): c for c in SchoolClass.unscoped_objects.filter(school=school)}
-            already = set(StudentEnrollment.unscoped_objects.filter(school=school, academic_year=target).values_list("student_id", flat=True))
-
-            # Sections first: promoted students are placed into the matching new-year section.
-            copied = {}
-            if options["sections"]:
-                copied["sections"] = _copy_sections(school, source, target)
-
-            plan = []
-            unresolved = []
-            for enrollment in _source_enrollments(source):
-                student = enrollment.student
-                if student.pk in already:
-                    report["skipped_already_enrolled"] += 1
-                    continue
-                decision = decisions.get(str(student.pk)) or {}
-                outcome = decision.get("outcome")
-                override = None
-                if decision.get("class"):
-                    override = classes.get(str(decision["class"]))
-                    if override is None:
-                        raise YearLifecycleError("A chosen class does not exist for this school.")
-                if not outcome:
-                    outcome, _reason = _propose(enrollment, school)
-                if outcome == "review":
-                    unresolved.append(student.full_name)
-                    continue
-                plan.append((enrollment, outcome, override))
-            if unresolved:
-                shown = ", ".join(unresolved[:5]) + ("…" if len(unresolved) > 5 else "")
-                raise YearLifecycleError(f"{len(unresolved)} student(s) need a decision before the rollover can run: {shown}.")
-
-            for enrollment, outcome, override in plan:
-                _apply_student(school=school, source=source, target=target, enrollment=enrollment, outcome=outcome, override_class=override, actor=actor, report=report)
-
-            if options["subject_offerings"]:
-                copied["subject_offerings"] = _copy_offerings(school, source, target)
-            if options["fee_structures"]:
-                copied["fee_structures"] = _copy_fee_structures(school, source, target)
-
-            summary = {
-                "students": dict(report["outcomes"]),
-                "students_without_section": report["students_without_section"],
-                "skipped_already_enrolled": report["skipped_already_enrolled"],
-                "configuration": copied,
-                "outstanding_balances": _outstanding(source),
-            }
+            # Lock both years for the whole run: a second request (a double click, a retry, another administrator) waits here
+            # and then finds the finished run instead of racing this one, and an activation cannot interleave either.
+            list(AcademicYear.unscoped_objects.select_for_update().filter(pk__in=[source.pk, target.pk]))
+            run, _ = RolloverRun.unscoped_objects.get_or_create(
+                school=school, source_year=source, target_year=target, defaults={"started_by": actor, "options": options}
+            )
+            if run.status == RolloverRun.Status.COMPLETED:
+                return run  # a retried request: nothing to do, the original report stands
+            run.status = RolloverRun.Status.RUNNING
+            run.options = options
+            run.error = ""
+            run.started_by = actor
+            summary = _apply_rollover(school, source, target, actor, decisions, options)
             run.status = RolloverRun.Status.COMPLETED
             run.summary = summary
             run.completed_at = timezone.now()
-            run.save(update_fields=["status", "summary", "completed_at", "updated_at"])
+            run.save(update_fields=["status", "options", "error", "started_by", "summary", "completed_at", "updated_at"])
             log_action(
                 action="academics.year_rollover_completed",
                 actor=actor,
@@ -526,18 +494,81 @@ def execute_rollover(source: AcademicYear, target: AcademicYear, *, actor, decis
                 severity="warning",
                 metadata={"from": source.name, "to": target.name, "students": summary["students"]},
             )
+            return run
     except YearLifecycleError as exc:
-        _mark_failed(run, str(exc))
+        _record_failure(school, source, target, actor, options, str(exc))
         raise
     except Exception:  # noqa: BLE001 - recorded, then re-raised as a safe message below
         logger.exception("Rollover %s -> %s failed", source.name, target.name)
-        _mark_failed(run, "The rollover could not be completed and nothing was changed. Please try again or contact support.")
+        _record_failure(school, source, target, actor, options, "The rollover could not be completed and nothing was changed. Please try again or contact support.")
         raise YearLifecycleError("The rollover could not be completed and nothing was changed. Please try again.") from None
-    return run
 
 
-def _mark_failed(run: RolloverRun, message: str) -> None:
-    RolloverRun.unscoped_objects.filter(pk=run.pk).update(status=RolloverRun.Status.FAILED, error=message[:1000], updated_at=timezone.now())
+def _apply_rollover(school, source, target, actor, decisions, options) -> dict:
+    """The work of a rollover, run inside `execute_rollover`'s transaction. Returns the completion summary."""
+    report = {"outcomes": Counter(), "students_without_section": 0, "skipped_already_enrolled": 0}
+    classes = {str(c.pk): c for c in SchoolClass.unscoped_objects.filter(school=school)}
+    already = set(StudentEnrollment.unscoped_objects.filter(school=school, academic_year=target).values_list("student_id", flat=True))
+
+    # Sections first: promoted students are placed into the matching new-year section.
+    copied = {}
+    if options["sections"]:
+        copied["sections"] = _copy_sections(school, source, target)
+
+    plan = []
+    unresolved = []
+    for enrollment in _source_enrollments(source):
+        student = enrollment.student
+        if student.pk in already:
+            report["skipped_already_enrolled"] += 1
+            continue
+        decision = decisions.get(str(student.pk)) or {}
+        outcome = decision.get("outcome")
+        override = None
+        if decision.get("class"):
+            override = classes.get(str(decision["class"]))
+            if override is None:
+                raise YearLifecycleError("A chosen class does not exist for this school.")
+        if not outcome:
+            outcome, _reason = _propose(enrollment, school)
+        if outcome == "review":
+            unresolved.append(student.full_name)
+            continue
+        plan.append((enrollment, outcome, override))
+    if unresolved:
+        shown = ", ".join(unresolved[:5]) + ("…" if len(unresolved) > 5 else "")
+        raise YearLifecycleError(f"{len(unresolved)} student(s) need a decision before the rollover can run: {shown}.")
+
+    for enrollment, outcome, override in plan:
+        _apply_student(school=school, source=source, target=target, enrollment=enrollment, outcome=outcome, override_class=override, actor=actor, report=report)
+
+    if options["subject_offerings"]:
+        copied["subject_offerings"] = _copy_offerings(school, source, target)
+    if options["fee_structures"]:
+        copied["fee_structures"] = _copy_fee_structures(school, source, target)
+
+    return {
+        "students": dict(report["outcomes"]),
+        "students_without_section": report["students_without_section"],
+        "skipped_already_enrolled": report["skipped_already_enrolled"],
+        "configuration": copied,
+        "outstanding_balances": _outstanding(source),
+    }
+
+
+def _record_failure(school, source, target, actor, options, message: str) -> None:
+    """Notes a failed attempt in its own transaction (the run's work was rolled back). Never downgrades a completed run."""
+    with transaction.atomic():
+        run, created = RolloverRun.unscoped_objects.select_for_update().get_or_create(
+            school=school,
+            source_year=source,
+            target_year=target,
+            defaults={"started_by": actor, "options": options, "status": RolloverRun.Status.FAILED, "error": message[:1000]},
+        )
+        if not created and run.status != RolloverRun.Status.COMPLETED:
+            run.status = RolloverRun.Status.FAILED
+            run.error = message[:1000]
+            run.save(update_fields=["status", "error", "updated_at"])
 
 
 # ---------------------------------------------------------------------------------------------------------------------

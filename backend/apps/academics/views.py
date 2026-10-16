@@ -128,6 +128,16 @@ class AcademicYearViewSet(AcademicsModelViewSet):
         "archived": {"is_archived": True},
     }
 
+    def destroy(self, request, *args, **kwargs):
+        """Deleting a year that was ever used would cascade away invoices and payments, so it is refused (see year_services.deletion_blocker)."""
+        from . import year_services
+
+        year = self.get_object()
+        blocker = year_services.deletion_blocker(year)
+        if blocker:
+            return _error(blocker, "YEAR_IN_USE", status.HTTP_409_CONFLICT)
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=True, methods=["post"])
     def archive(self, request, pk=None):
         year = self.get_object()

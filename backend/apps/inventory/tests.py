@@ -26,8 +26,9 @@ def _principal():
     seed_permission_catalog()
     school = SchoolFactory()
     seed_default_roles_for_school(school)
+    # The principal is view-only for inventory by design (see authorization/catalog.py); the school administrator manages it.
     principal = UserFactory(school=school)
-    assign_role(user=principal, role=Role.unscoped_objects.get(school=school, slug="principal"))
+    assign_role(user=principal, role=Role.unscoped_objects.get(school=school, slug="school-administrator"))
     return school, principal
 
 

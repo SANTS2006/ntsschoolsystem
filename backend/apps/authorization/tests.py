@@ -62,14 +62,16 @@ class TestRoleManagement:
         response = api_client.post("/api/v1/roles/", {"name": "Sneaky Role"}, format="json")
         assert response.status_code == 403
 
-    def test_cannot_delete_a_system_role(self, api_client):
+    def test_a_system_role_can_be_deleted_by_an_administrator(self, api_client):
+        """System roles are editable, deactivatable and deletable (a school can shape its own role set); only the role
+        management permission allows it."""
         school, admin = _school_admin()
         _login(api_client, admin)
         teacher_role = Role.unscoped_objects.get(school=school, slug="teacher")
 
         response = api_client.delete(f"/api/v1/roles/{teacher_role.id}/")
-        assert response.status_code == 403
-        assert Role.unscoped_objects.filter(pk=teacher_role.pk).exists()
+        assert response.status_code == 204
+        assert not Role.unscoped_objects.filter(pk=teacher_role.pk).exists()
 
     def test_can_delete_a_custom_role(self, api_client):
         school, admin = _school_admin()

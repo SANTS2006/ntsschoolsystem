@@ -44,13 +44,12 @@ class TestDocumentPermissions:
         assert response.status_code == 201
         assert response.data["uploaded_by"] == principal.id
 
-    def test_teacher_cannot_view_documents(self, api_client):
-        """documents.* is deliberately absent from every seeded role's default prefix
-        list except principal/school-administrator, same stricter treatment as medical
-        and discipline — documents can hold confidential records."""
+    def test_student_cannot_view_documents(self, api_client):
+        """Students hold no documents.* permission (teachers, accountants and exams directors do, with owner-only
+        edit/delete rules): documents can hold confidential records."""
         school, _ = _principal()
         teacher = UserFactory(school=school)
-        assign_role(user=teacher, role=Role.unscoped_objects.get(school=school, slug="teacher"))
+        assign_role(user=teacher, role=Role.unscoped_objects.get(school=school, slug="student"))
         _login(api_client, teacher)
 
         response = api_client.get("/api/v1/documents/")

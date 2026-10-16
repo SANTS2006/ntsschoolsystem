@@ -623,3 +623,113 @@ class TestActiveYearOperations:
     def test_the_database_refuses_two_current_terms(self, world):
         with pytest.raises(IntegrityError), transaction.atomic():
             Term.unscoped_objects.filter(pk=world["t2"].pk).update(is_current=True)
+
+
+# ---- protecting the records a year owns ---------------------------------------------------------------------------------------
+
+class TestYearDeletion:
+    def test_a_used_year_cannot_be_deleted(self, api_client, world):
+        _login(api_client, world["principal"])
+        # The active year, and a closed one with invoices/enrolments: both refused, nothing lost.
+        active = api_client.delete(f"{API}/academic-years/{world['y1'].pk}/")
+        assert active.status_code == 409 and "active" in active.data["message"].lower()
+        _rollover(api_client, world)
+        api_client.post(f"{API}/academic-years/{world['y2'].pk}/activate/")
+        closed = api_client.delete(f"{API}/academic-years/{world['y1'].pk}/")
+        assert closed.status_code == 409
+        assert AcademicYear.unscoped_objects.filter(pk=world["y1"].pk).exists()
+        assert type(world["invoice"]).unscoped_objects.filter(pk=world["invoice"].pk).exists()
+        assert type(world["payment"]).unscoped_objects.filter(pk=world["payment"].pk).exists()
+
+    def test_an_unused_year_can_be_deleted(self, api_client, world):
+        _login(api_client, world["principal"])
+        spare = AcademicYearFactory(school=world["school"], name="2040/2041", start_date=date(2040, 9, 1), end_date=date(2041, 7, 31), is_current=False)
+        assert api_client.delete(f"{API}/academic-years/{spare.pk}/").status_code == 204
+        assert not AcademicYear.unscoped_objects.filter(pk=spare.pk).exists()
+
+    def test_a_school_with_years_enrolments_and_rollovers_can_still_be_deleted_by_the_platform(self, world):
+        from apps.tenants.models import School
+        from apps.tenants.services import SchoolDeletionBlocked, delete_school
+
+        year_services.execute_rollover(world["y1"], world["y2"], actor=world["principal"], decisions=_decisions(world))
+        school = world["school"]
+        with pytest.raises(SchoolDeletionBlocked):
+            delete_school(school=school, actor=None)  # still active: must be suspended first
+        School.objects.filter(pk=school.pk).update(status="suspended")
+        school.refresh_from_db()
+        delete_school(school=school, actor=None)
+        assert not School.objects.filter(pk=school.pk).exists()
+        assert not StudentEnrollment.unscoped_objects.filter(school_id=school.pk).exists()
+        assert not RolloverRun.unscoped_objects.filter(school_id=school.pk).exists()
+
+
+# ---- the whole workflow, end to end, seen by each role ------------------------------------------------------------------------
+
+class TestEndToEnd:
+    """2026/2027 is active -> create 2027/2028 and its term -> preview -> decide -> run -> activate -> every role looks around."""
+
+    def test_the_full_year_end_workflow(self, api_client, world):
+        school = world["school"]
+        g1, g2 = world["g1"], world["g2"]
+
+        # 1-2. The active year is 2026/2027; the principal creates the upcoming year through the API (it must not activate itself).
+        _login(api_client, world["principal"])
+        created = api_client.post(f"{API}/academic-years/", {"name": "2028/2029", "start_date": "2028-09-01", "end_date": "2029-07-31"}, format="json")
+        assert created.status_code == 201 and created.data["status"] == "upcoming"
+        assert api_client.get(f"{API}/year-context/").data["active"]["name"] == "2026/2027"
+
+        # 3-4. Preview shows every student needing a decision (no results yet); nothing was written.
+        preview = api_client.post(f"{API}/year-rollover/preview/", {"source": str(world["y1"].pk), "target": str(world["y2"].pk)}, format="json").data["preview"]
+        assert preview["ready"] is False and len(preview["students"]) == 3
+        assert not StudentEnrollment.unscoped_objects.filter(academic_year=world["y2"]).exists()
+
+        # Running without deciding is refused; deciding lets it run; activation before the run is refused.
+        assert api_client.post(f"{API}/academic-years/{world['y2'].pk}/activate/").status_code == 400
+        assert api_client.post(f"{API}/year-rollover/execute/", {"source": str(world["y1"].pk), "target": str(world["y2"].pk), "decisions": {}}, format="json").status_code == 400
+        run = _rollover(api_client, world)
+        assert run.status_code == 200 and run.data["run"]["summary"]["students"] == {"promoted": 1, "repeated": 1, "graduated": 1}
+
+        # 5-6. Activate. Exactly one active year; the old one is closed.
+        assert api_client.post(f"{API}/academic-years/{world['y2'].pk}/activate/").status_code == 200
+        assert list(AcademicYear.unscoped_objects.filter(school=school, is_current=True).values_list("name", flat=True)) == ["2027/2028"]
+        assert AcademicYear.unscoped_objects.get(pk=world["y1"].pk).status == "closed"
+
+        # 7-8. Every role now works in 2027/2028.
+        teacher = _staff(school, "teacher")
+        accountant = _staff(school, "accountant")
+        student_user = _staff(school, "student")
+        for user in (teacher, accountant, student_user):
+            api_client.credentials()
+            api_client.post("/api/v1/auth/logout/")
+            _login(api_client, user)
+            context = api_client.get(f"{API}/year-context/").data
+            assert context["active"]["name"] == "2027/2028", user.email
+            assert {y["status"] for y in context["years"]} == {"active", "closed", "upcoming"}  # 2027/2028, 2026/2027, 2028/2029
+
+        # 9-10. History is intact and still readable by those who may read it.
+        api_client.post("/api/v1/auth/logout/")
+        _login(api_client, accountant)
+        old_invoices = api_client.get(f"{API.replace('academics', 'finance')}/invoices/", {"academic_year": str(world["y1"].pk)})
+        assert old_invoices.status_code == 200 and old_invoices.data["count"] == 1
+        world["invoice"].refresh_from_db()
+        assert world["invoice"].balance == Decimal("200.00") and world["invoice"].academic_year_id == world["y1"].pk
+        assert PromotionRecord.unscoped_objects.filter(previous_academic_year=world["y1"]).count() == 3
+        assert StudentEnrollment.unscoped_objects.filter(academic_year=world["y1"]).count() == 3  # nothing overwritten
+        assert Student.unscoped_objects.filter(school=school).count() == 3  # no duplicate people
+
+        # 11. Who cannot: closed-year writes, rollover/activation by non-administrators, another school's administrator.
+        api_client.post("/api/v1/auth/logout/")
+        _login(api_client, teacher)
+        assert api_client.post(f"{API}/academic-years/{world['y1'].pk}/activate/").status_code == 403
+        assert api_client.post(f"{API}/year-rollover/execute/", {"source": str(world["y1"].pk), "target": str(world["y2"].pk)}, format="json").status_code == 403
+        api_client.post("/api/v1/auth/logout/")
+        seed_default_roles_for_school(other := SchoolFactory())
+        _login(api_client, _staff(other, "principal"))
+        assert api_client.post(f"{API}/academic-years/{world['y2'].pk}/activate/").status_code == 404
+        assert api_client.get("/api/v1/students/", {"academic_year": str(world["y1"].pk)}).status_code == 400
+
+        # 12. The administrator can still see 2026/2027's students (viewing year) without changing the active year.
+        api_client.post("/api/v1/auth/logout/")
+        _login(api_client, world["principal"])
+        assert api_client.get("/api/v1/students/", {"academic_year": str(world["y1"].pk)}).data["count"] == 3
+        assert AcademicYear.unscoped_objects.get(school=school, is_current=True).pk == world["y2"].pk
