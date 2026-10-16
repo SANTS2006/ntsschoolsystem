@@ -435,8 +435,11 @@ class TestClosedYears:
 
         assessment = AssessmentFactory(school=world["school"], subject_offering=world["offering"])
         self._roll(api_client, world)
+        # The year was closed through the API, so reload: these objects still hold the pre-close state in memory.
+        offering = SubjectOffering.unscoped_objects.get(pk=world["offering"].pk)
+        assessment = type(assessment).unscoped_objects.get(pk=assessment.pk)
         with pytest.raises(ValueError, match="archived"):
-            services.enter_subject_exam_score(world["offering"], student=world["pass_student"], exam_score=Decimal("50"), entered_by=world["principal"])
+            services.enter_subject_exam_score(offering, student=world["pass_student"], exam_score=Decimal("50"), entered_by=world["principal"])
         with pytest.raises(ValueError, match="archived"):
             services.save_assessment_scores(assessment, entries=[{"student": world["pass_student"], "raw_score": Decimal("10")}], submit=False)
 
