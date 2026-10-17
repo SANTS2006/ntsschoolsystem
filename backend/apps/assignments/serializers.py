@@ -1,3 +1,4 @@
+from apps.academics.services import assert_year_not_archived, year_of
 from decimal import Decimal
 
 from rest_framework import serializers
@@ -47,6 +48,12 @@ class AssignmentSerializer(serializers.ModelSerializer):
         section = attrs.get("section", getattr(self.instance, "section", None))
         if section is not None and school_class is not None and section.school_class_id != school_class.id:
             raise serializers.ValidationError({"section": "Section must belong to the selected class."})
+        # Work belonging to a closed academic year is read-only (term/section tell us the year).
+        term = attrs.get("term", getattr(self.instance, "term", None))
+        try:
+            assert_year_not_archived(year_of(term=term, section=section))
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
         return attrs
 
 

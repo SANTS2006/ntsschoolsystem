@@ -278,8 +278,12 @@ def build_rollover_preview(source: AcademicYear, target: AcademicYear) -> dict:
         warnings.append(f"{students_without_enrollment} active student(s) have no class recorded for {source.name}; they are not part of this rollover and need a class assigned by hand.")
 
     target_terms = list(Term.unscoped_objects.filter(school=school, academic_year=target).order_by("sequence"))
+    source_term_count = Term.unscoped_objects.filter(school=school, academic_year=source).count()
     if not target_terms:
-        warnings.append(f'"{target.name}" has no terms yet. Add them before activating it (subject offerings and fee plans are matched to terms by order).')
+        warnings.append(
+            f'"{target.name}" has no terms yet. The rollover can copy {source_term_count} term(s) from "{source.name}" (dates moved to the new year), '
+            "or add them yourself first (subject offerings and fee plans are matched to terms by order)."
+        )
 
     source_sections = Section.unscoped_objects.filter(school=school, academic_year=source).count()
     target_sections = Section.unscoped_objects.filter(school=school, academic_year=target).count()
@@ -297,6 +301,7 @@ def build_rollover_preview(source: AcademicYear, target: AcademicYear) -> dict:
         "students": rows,
         "counts": dict(counts),
         "configuration": {
+            "terms": {"in_source": source_term_count, "in_target": len(target_terms)},
             "sections": {"in_source": source_sections, "in_target": target_sections},
             "subject_offerings": {"in_source": source_offerings, "in_target": target_offerings, "needs_terms": not target_terms},
             "fee_structures": {"in_source": source_fees, "in_target": target_fees},
@@ -325,6 +330,24 @@ def _copy_sections(school, source, target) -> dict:
         made += created
         skipped += not created
     return {"created": made, "already_there": skipped}
+
+
+def _copy_terms(school, source, target) -> dict:
+    """Terms for the new year, only when it has none: same names and order, dates moved by the distance between the two years'
+    start dates (and kept inside the new year). Terms that would fall wholly outside the new year are skipped and reported."""
+    if Term.unscoped_objects.filter(school=school, academic_year=target).exists():
+        return {"created": 0, "skipped": 0, "already_had_terms": True}
+    delta = target.start_date - source.start_date
+    made = skipped = 0
+    for term in Term.unscoped_objects.filter(school=school, academic_year=source).order_by("sequence"):
+        start, end = term.start_date + delta, term.end_date + delta
+        end = min(end, target.end_date)
+        if start >= target.end_date or end <= start:
+            skipped += 1
+            continue
+        Term.unscoped_objects.create(school=school, academic_year=target, name=term.name, sequence=term.sequence, start_date=start, end_date=end, is_current=False)
+        made += 1
+    return {"created": made, "skipped": skipped, "already_had_terms": False}
 
 
 def _copy_offerings(school, source, target) -> dict:
@@ -462,7 +485,7 @@ def execute_rollover(source: AcademicYear, target: AcademicYear, *, actor, decis
     `decisions` maps student id -> {"outcome": promote|repeat|graduate|withdraw|transfer, "class": class id (optional)}.
     `options` toggles the configuration copies: sections, subject_offerings, fee_structures (all default on)."""
     decisions = decisions or {}
-    options = {"sections": True, "subject_offerings": True, "fee_structures": True, **(options or {})}
+    options = {"terms": True, "sections": True, "subject_offerings": True, "fee_structures": True, **(options or {})}
     _check_years(source, target)
     school = source.school
 
@@ -510,8 +533,10 @@ def _apply_rollover(school, source, target, actor, decisions, options) -> dict:
     classes = {str(c.pk): c for c in SchoolClass.unscoped_objects.filter(school=school)}
     already = set(StudentEnrollment.unscoped_objects.filter(school=school, academic_year=target).values_list("student_id", flat=True))
 
-    # Sections first: promoted students are placed into the matching new-year section.
+    # Terms first (offerings and fee plans are matched to them), then sections: promoted students are placed into the matching new-year section.
     copied = {}
+    if options["terms"]:
+        copied["terms"] = _copy_terms(school, source, target)
     if options["sections"]:
         copied["sections"] = _copy_sections(school, source, target)
 

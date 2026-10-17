@@ -2744,6 +2744,16 @@ class TestSectionClassTeacher:
         assert response.data["class_teacher_name"] == staff.user.full_name
 
 
+def _without_closed_year_correction(school):
+    """The principal may correct closed years by default; these tests are about the ordinary read-only rule, so take that
+    one permission away from the school's principal role first."""
+    from apps.authorization.models import RolePermission
+
+    RolePermission.unscoped_objects.filter(
+        role__school=school, role__slug="principal", permission__code="academics.correct_closed_year"
+    ).delete()
+
+
 class TestAcademicYearArchiving:
     def test_archives_a_non_current_year(self, api_client):
         school, principal = _principal()
@@ -2802,6 +2812,7 @@ class TestAcademicYearArchiving:
 
     def test_cannot_create_a_section_for_an_archived_year(self, api_client):
         school, principal = _principal()
+        _without_closed_year_correction(school)
         year = AcademicYearFactory(school=school, is_current=False, is_archived=True)
         school_class = SchoolClassFactory(school=school)
         _login(api_client, principal)
@@ -2816,6 +2827,7 @@ class TestAcademicYearArchiving:
 
     def test_cannot_create_a_term_for_an_archived_year(self, api_client):
         school, principal = _principal()
+        _without_closed_year_correction(school)
         year = AcademicYearFactory(school=school, is_current=False, is_archived=True)
         _login(api_client, principal)
 

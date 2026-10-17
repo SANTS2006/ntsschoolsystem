@@ -57,6 +57,13 @@ class LiveSessionSerializer(serializers.ModelSerializer):
         section = attrs.get("section", getattr(self.instance, "section", None))
         if section is not None and school_class is not None and section.school_class_id != school_class.id:
             raise serializers.ValidationError({"section": "Section must belong to the selected class."})
+        if section is not None:
+            from apps.academics.services import assert_year_not_archived
+
+            try:
+                assert_year_not_archived(section.academic_year)  # a lesson tied to a closed year's section is history
+            except ValueError as exc:
+                raise serializers.ValidationError(str(exc)) from exc
         return attrs
 
 

@@ -24,18 +24,41 @@ def _round2(value):
 
 
 def assert_year_not_archived(academic_year: AcademicYear | None) -> None:
-    """The single choke point every write path for a year-scoped record runs through: Section,
-    Term, and SubjectOffering here in academics (direct FK to AcademicYear/Term), plus, one hop
-    further via their own `section.academic_year`, AttendanceRecord and TimetableEntry, and
-    FeeStructure/Invoice in finance (direct, nullable FK). `None` is a no-op — some of those FKs
-    are optional, and a record with no year at all was never year-scoped to begin with.
+    """The single choke point every write path for a year-scoped record runs through: Section, Term, SubjectOffering,
+    marks, CA, exams, assignments, quizzes and live lessons here and in the other apps, attendance, timetable, fee plans
+    and invoices. `None` is a no-op — some of those FKs are optional.
 
-    Raises a plain ValueError, not a DRF error — same convention as every other service function
-    in this module (see close_ca, save_assessment_scores): the caller (almost always a
-    serializer's own `validate()`) re-raises it as `serializers.ValidationError`, keeping this
-    module framework-agnostic and reusable outside a request (management commands, tests)."""
-    if academic_year is not None and academic_year.is_archived:
-        raise ValueError(f'"{academic_year.name}" is archived; its records are read-only.')
+    A closed (archived) year is read-only, EXCEPT for a person who holds `academics.correct_closed_year` (the principal,
+    school administrator and exams director by default): their writes go through and are recorded in the audit log as
+    `academics.closed_year_correction` (see TenantContextMixin.finalize_response). They can still only change what their
+    ordinary permissions let them change.
+
+    Raises a plain ValueError, not a DRF error — same convention as every other service function in this module: the
+    caller (almost always a serializer's own `validate()`) re-raises it as `serializers.ValidationError`."""
+    if academic_year is None or not academic_year.is_archived:
+        return
+    from apps.tenants.context import get_year_correction
+
+    correction = get_year_correction()
+    if correction is not None and correction.allowed:
+        correction.note(academic_year.name)
+        return
+    raise ValueError(
+        f'"{academic_year.name}" is archived (closed); its records are read-only. '
+        "The principal, school administrator or exams director can correct them."
+    )
+
+
+def year_of(*, term=None, section=None, subject_offering=None) -> AcademicYear | None:
+    """The academic year a record belongs to, from whichever of its term / section / subject offering it has (None if it has
+    none of them, in which case nothing ties it to a year and nothing is blocked)."""
+    if subject_offering is not None:
+        return subject_offering.academic_year
+    if term is not None:
+        return term.academic_year
+    if section is not None:
+        return section.academic_year
+    return None
 
 
 def assert_year_is_active(academic_year: AcademicYear | None, what: str = "This") -> None:

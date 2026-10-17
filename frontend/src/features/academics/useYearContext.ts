@@ -5,6 +5,7 @@ import type { ApiError } from "@/lib/api-client";
 import {
   activateYear,
   executeRollover,
+  fetchRolloverRuns,
   fetchYearContext,
   previewRollover,
   type Decisions,
@@ -45,4 +46,8 @@ export function useExecuteRollover() {
     mutationFn: (body) => executeRollover(body),
     onSuccess: () => refreshAfterYearChange(queryClient),
   });
+}
+
+export function useRolloverRuns(enabled = true) {
+  return useQuery({ queryKey: ["academics", "rollover-runs"], queryFn: fetchRolloverRuns, enabled });
 }

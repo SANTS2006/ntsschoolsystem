@@ -13,7 +13,7 @@ import { useToast } from "@/components/ui/toastContext";
 import type { ApiError } from "@/lib/api-client";
 
 import { useSchoolClasses } from "./useAcademicsLookups";
-import { useActivateYear, useExecuteRollover, usePreviewRollover, useYearContext } from "./useYearContext";
+import { useActivateYear, useExecuteRollover, usePreviewRollover, useRolloverRuns, useYearContext } from "./useYearContext";
 import type { Decisions, Outcome, RolloverOptions, RolloverPreview, RolloverSummary } from "./yearApi";
 
 const OUTCOME_LABEL: Record<Outcome | "review", string> = {
@@ -36,11 +36,12 @@ export function YearRolloverPage() {
   const preview = usePreviewRollover();
   const execute = useExecuteRollover();
   const activate = useActivateYear();
+  const { data: runs } = useRolloverRuns();
 
   const [sourceId, setSourceId] = useState("");
   const [targetId, setTargetId] = useState("");
   const [decisions, setDecisions] = useState<Decisions>({});
-  const [options, setOptions] = useState<RolloverOptions>({ sections: true, subject_offerings: true, fee_structures: true });
+  const [options, setOptions] = useState<RolloverOptions>({ terms: true, sections: true, subject_offerings: true, fee_structures: true });
   const [result, setResult] = useState<RolloverSummary | null>(null);
 
   const years = context?.years ?? [];
@@ -294,6 +295,7 @@ export function YearRolloverPage() {
             <CardContent className="flex flex-col gap-3">
               {(
                 [
+                  ["terms", "Copy terms into the new year if it has none (dates move to the new year)"],
                   ["sections", "Copy sections (classes get the same sections in the new year)"],
                   ["subject_offerings", "Copy subject offerings and teachers (matched to the new year's terms)"],
                   ["fee_structures", "Copy fee plans (new plans for the new year; no invoices or payments)"],
@@ -344,6 +346,28 @@ export function YearRolloverPage() {
             </Card>
           )}
         </>
+      )}
+
+      {runs && runs.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Previous rollovers</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col gap-2 text-sm">
+              {runs.map((run) => (
+                <li key={run.id} className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">
+                    {run.source} → {run.target}
+                  </span>
+                  <Badge tone={run.status === "completed" ? "success" : run.status === "failed" ? "danger" : "neutral"}>{run.status}</Badge>
+                  {run.started_by && <span className="text-[var(--color-text-muted)]">by {run.started_by}</span>}
+                  {run.status === "failed" && run.error && <span className="text-[var(--color-danger)]">{run.error}</span>}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

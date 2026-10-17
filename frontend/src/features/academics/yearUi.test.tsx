@@ -5,10 +5,12 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { MyAcademicHistoryPage } from "./MyAcademicHistoryPage";
 import { YearBadge } from "./YearBadge";
 import { YearRolloverPage } from "./YearRolloverPage";
 import { YearSelect } from "./YearSelect";
-import type { RolloverPreview, YearContext } from "./yearApi";
+import { hasEnded } from "./yearEnded";
+import type { MyYearHistory, RolloverPreview, YearContext } from "./yearApi";
 
 const y1 = { id: "y1", name: "2026/2027", start_date: "2026-09-01", end_date: "2027-07-31", status: "active", is_current: true, is_archived: false } as const;
 const y2 = { id: "y2", name: "2027/2028", start_date: "2027-09-01", end_date: "2028-07-31", status: "upcoming", is_current: false, is_archived: false } as const;
@@ -40,6 +42,8 @@ const api = vi.hoisted(() => ({
   previewRollover: vi.fn(),
   executeRollover: vi.fn(),
   activateYear: vi.fn(),
+  fetchMyYearHistory: vi.fn(),
+  fetchRolloverRuns: vi.fn(async () => []),
 }));
 vi.mock("./yearApi", () => api);
 vi.mock("./useAcademicsLookups", () => ({ useSchoolClasses: () => ({ data: [{ id: "c2", name: "Grade 2" }] }) }));
@@ -131,7 +135,7 @@ describe("YearRolloverPage", () => {
       source: "y1",
       target: "y2",
       decisions: { s1: { outcome: "promote" }, s2: { outcome: "repeat" } },
-      options: { sections: true, subject_offerings: true, fee_structures: true },
+      options: { terms: true, sections: true, subject_offerings: true, fee_structures: true },
     });
     expect(await screen.findByText(/Make 2027\/2028 the active year/)).toBeInTheDocument();
   });
@@ -151,5 +155,50 @@ describe("YearRolloverPage", () => {
   it("shows the outstanding balances and warns that they stay on their invoices", async () => {
     await loadPreview();
     expect(screen.getByText(/Outstanding balances stay on their original invoices: 200.00/)).toBeInTheDocument();
+  });
+});
+
+
+describe("year ended hint", () => {
+  it("knows when the active year's end date has passed", () => {
+    expect(hasEnded({ status: "active", end_date: "2026-07-31" }, "2026-08-01")).toBe(true);
+    expect(hasEnded({ status: "active", end_date: "2026-07-31" }, "2026-07-31")).toBe(false);
+    expect(hasEnded({ status: "upcoming", end_date: "2020-01-01" }, "2026-08-01")).toBe(false);
+    expect(hasEnded(null)).toBe(false);
+  });
+
+  it("flags an ended year in the header badge", async () => {
+    context = { active: { ...y1, end_date: "2020-07-31" }, current_term: { id: "t1", name: "Term 1" }, years: [y1] };
+    wrap(<YearBadge />);
+    expect(await screen.findByText("ended")).toBeInTheDocument();
+  });
+});
+
+describe("MyAcademicHistoryPage", () => {
+  it("shows each year with the class, outcome and links to published results", async () => {
+    const history: MyYearHistory = {
+      is_student: true,
+      years: [
+        { academic_year_id: "y2", academic_year: "2027/2028", status: "active", start_date: "2027-09-01", end_date: "2028-07-31", class: "Grade 2", section: "A", outcome: "", results: [] },
+        {
+          academic_year_id: "y1", academic_year: "2026/2027", status: "closed", start_date: "2026-09-01", end_date: "2027-07-31", class: "Grade 1", section: "A", outcome: "promoted",
+          results: [{ term_id: "t1", term_name: "Term 1", school_class_id: "c1", school_class_name: "Grade 1", published_at: null }],
+        },
+      ],
+    };
+    api.fetchMyYearHistory.mockResolvedValue(history);
+    wrap(<MyAcademicHistoryPage />);
+    expect(await screen.findByText("2027/2028")).toBeInTheDocument();
+    expect(screen.getByText("Current year")).toBeInTheDocument();
+    expect(screen.getByText("Completed")).toBeInTheDocument();
+    expect(screen.getByText(/Promoted/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Term 1 results/ })).toHaveAttribute("href", "/my-results/c1/t1");
+    expect(screen.getByText("No published results for this year yet.")).toBeInTheDocument();
+  });
+
+  it("says so when there is nothing yet", async () => {
+    api.fetchMyYearHistory.mockResolvedValue({ is_student: true, years: [] });
+    wrap(<MyAcademicHistoryPage />);
+    expect(await screen.findByText("No academic years yet")).toBeInTheDocument();
   });
 });

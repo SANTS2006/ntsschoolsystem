@@ -68,6 +68,7 @@ PERMISSION_CATALOG = [
     ("academics.create", "Create academic structure", "academics"),
     ("academics.update", "Update academic structure", "academics"),
     ("academics.delete", "Delete academic structure", "academics"),
+    ("academics.correct_closed_year", "Correct records of a closed academic year (audited)", "academics"),
     ("library.view", "View library catalog and loans", "library"),
     ("library.create", "Create library records", "library"),
     ("library.update", "Update library records (checkout/return/renew)", "library"),
@@ -211,7 +212,7 @@ DEFAULT_ROLE_PERMISSION_PREFIXES = {
         "include": [
             # The exams director builds the EXAM timetable (rooms, invigilators, seating) — not the classes' timetable —
             # and has no student/staff attendance module (their own attendance is under My Attendance).
-            "examinations.", "results.", "exam_timetable.", "ca.manage",
+            "examinations.", "results.", "exam_timetable.", "ca.manage", "academics.correct_closed_year",
             "communications.", "complaints.", "documents.", "events.", "academics.view", "students.view",
         ],
         "exclude": [],

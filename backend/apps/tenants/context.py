@@ -35,3 +35,40 @@ def is_platform_admin_context() -> bool:
 
 def reset_platform_admin_context(token):
     _is_platform_admin.reset(token)
+
+
+class YearCorrection:
+    """Per request: may this person write to a closed academic year, and which closed years did they actually touch?
+    `allowed` asks the permission check only when a closed-year write is first attempted (most requests never do)."""
+
+    def __init__(self, check):
+        self._check = check
+        self._allowed = None
+        self.years: set[str] = set()
+
+    @property
+    def allowed(self) -> bool:
+        if self._allowed is None:
+            try:
+                self._allowed = bool(self._check())
+            except Exception:  # noqa: BLE001 - a failing check must mean "no", never "yes"
+                self._allowed = False
+        return self._allowed
+
+    def note(self, year_name: str) -> None:
+        self.years.add(year_name)
+
+
+_year_correction = contextvars.ContextVar("year_correction", default=None)
+
+
+def set_year_correction(value):
+    return _year_correction.set(value)
+
+
+def get_year_correction():
+    return _year_correction.get()
+
+
+def reset_year_correction(token):
+    _year_correction.reset(token)

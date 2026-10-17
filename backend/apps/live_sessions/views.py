@@ -64,6 +64,16 @@ class LiveSessionViewSet(TenantScopedModelViewSet):
             raise serializers.ValidationError("Only staff members can schedule live sessions.")
         serializer.save(school=get_current_school(), teacher=staff_profile)
 
+    def perform_destroy(self, instance):
+        from apps.academics.services import assert_year_not_archived
+
+        if instance.section_id:
+            try:
+                assert_year_not_archived(instance.section.academic_year)
+            except ValueError as exc:
+                raise serializers.ValidationError(str(exc)) from exc
+        instance.delete()
+
     @action(detail=False, methods=["get"])
     def options(self, request):
         """What the schedule form may offer: for a teacher, only the subjects and classes they are assigned to."""

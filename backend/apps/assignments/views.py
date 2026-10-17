@@ -6,6 +6,7 @@ from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.academics.services import assert_year_not_archived, year_of
 from apps.authorization.permissions import require_permission
 from apps.live_sessions.services import works_as_teacher
 from apps.common.validators import validate_upload_file
@@ -25,6 +26,14 @@ _ACTION_SUFFIX = {
     "destroy": "delete",
     "grade": "update",
 }
+
+
+def _guard_closed_year(year):
+    """Work of a closed academic year is read-only (unless the person may correct closed years; see assert_year_not_archived)."""
+    try:
+        assert_year_not_archived(year)
+    except ValueError as exc:
+        raise serializers.ValidationError(str(exc)) from exc
 
 
 def _ok(message="", **extra):
@@ -68,6 +77,10 @@ class AssignmentViewSet(TenantScopedModelViewSet):
         assignment = serializer.save(school=get_current_school(), teacher=staff_profile)
         services.notify_new_assignment(assignment)
 
+    def perform_destroy(self, instance):
+        _guard_closed_year(year_of(term=instance.term, section=instance.section))
+        instance.delete()
+
 
 class AssignmentSubmissionViewSet(TenantScopedModelViewSet):
     serializer_class = AssignmentSubmissionSerializer
@@ -90,6 +103,7 @@ class AssignmentSubmissionViewSet(TenantScopedModelViewSet):
     @action(detail=True, methods=["post"])
     def grade(self, request, pk=None):
         submission = self.get_object()
+        _guard_closed_year(year_of(term=submission.assignment.term, section=submission.assignment.section))
         serializer = GradeSubmissionSerializer(data=request.data, context={"submission": submission})
         serializer.is_valid(raise_exception=True)
         staff_profile = getattr(request.user, "staff_profile", None)
@@ -161,6 +175,10 @@ class SubmitAssignmentView(_StudentPermission):
         )
         if not in_class:
             return _error("Assignment not found.", "NOT_FOUND", status.HTTP_404_NOT_FOUND)
+        try:
+            assert_year_not_archived(year_of(term=assignment.term, section=assignment.section))
+        except ValueError as exc:
+            return _error(str(exc), "YEAR_CLOSED", status.HTTP_400_BAD_REQUEST)
         existing = AssignmentSubmission.objects.filter(assignment=assignment, student=student_profile).first()
         if existing is not None and existing.status == AssignmentSubmission.Status.GRADED:
             return _error("This work has already been marked, so it can't be resubmitted.", "ALREADY_GRADED", status.HTTP_400_BAD_REQUEST)

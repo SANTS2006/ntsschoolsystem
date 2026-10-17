@@ -7,6 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.academics.services import assert_year_not_archived
 from apps.academics.models import StudentSubjectEnrollment, SubjectOffering
 from apps.authorization.permissions import require_permission
 from apps.common.views import TenantScopedModelViewSet, TenantScopedViewSet
@@ -76,6 +77,10 @@ class QuizViewSet(TenantScopedModelViewSet):
         school = get_current_school()
 
         offering = get_object_or_404(SubjectOffering, pk=data["subject_offering"], school=school)
+        try:
+            assert_year_not_archived(offering.academic_year)
+        except ValueError as exc:
+            return _error(str(exc))
         if not self._teaches(offering):
             return _error("You can only create quizzes for a subject you teach.", status.HTTP_403_FORBIDDEN, "FORBIDDEN")
 
@@ -101,6 +106,7 @@ class QuizViewSet(TenantScopedModelViewSet):
         return response
 
     def perform_destroy(self, instance):
+        assert_year_not_archived(instance.subject_offering.academic_year)  # ValueError -> handled in destroy()
         if not self._teaches(instance.subject_offering):
             raise PermissionError("Only the subject's own teacher can delete this quiz.")
         if instance.attempts.exists():
@@ -115,7 +121,7 @@ class QuizViewSet(TenantScopedModelViewSet):
             self.perform_destroy(instance)
         except PermissionError as exc:
             return _error(str(exc), status.HTTP_403_FORBIDDEN, "FORBIDDEN")
-        except services.QuizAttemptError as exc:
+        except (services.QuizAttemptError, ValueError) as exc:
             return _error(str(exc))
         return Response(status=status.HTTP_204_NO_CONTENT)
 

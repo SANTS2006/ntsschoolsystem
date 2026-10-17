@@ -24,7 +24,61 @@ class AcademicYearContextView(TenantScopedAPIView):
     permission_classes = [IsSchoolMember]
 
     def get(self, request):
-        return _ok(**years.year_context(get_current_school()))
+        from apps.authorization.services import user_has_permission
+
+        context = years.year_context(get_current_school())
+        # The interface uses this only to show a hint; the server decides on every write.
+        context["can_correct_closed_years"] = user_has_permission(request.user, "academics.correct_closed_year")
+        return _ok(**context)
+
+
+class MyYearHistoryView(TenantScopedAPIView):
+    """GET /academics/my-year-history/ — a student's own academic history, year by year: class, section and outcome for every
+    year they were enrolled, and the published term results of that year (each links to the existing report). Only ever the
+    caller's own record; nothing here takes a student id."""
+
+    permission_classes = [IsSchoolMember]
+
+    def get(self, request):
+        from .models import StudentEnrollment, TermResultPublication
+
+        student = getattr(request.user, "student_profile", None)
+        if student is None:
+            return _ok(years=[], is_student=False)
+        enrollments = list(
+            StudentEnrollment.objects.filter(student=student).select_related("academic_year", "school_class", "section").order_by("-academic_year__start_date")
+        )
+        publications = TermResultPublication.objects.filter(
+            student=student, status__in=[TermResultPublication.Status.PUBLISHED, TermResultPublication.Status.LOCKED]
+        ).select_related("term", "term__academic_year", "school_class")
+        by_year: dict = {}
+        for pub in publications:
+            by_year.setdefault(pub.term.academic_year_id, []).append(
+                {
+                    "term_name": pub.term.name,
+                    "term_id": str(pub.term_id),
+                    "school_class_id": str(pub.school_class_id),
+                    "school_class_name": pub.school_class.name,
+                    "published_at": pub.published_at,
+                    "sequence": pub.term.sequence,
+                }
+            )
+        rows = []
+        for e in enrollments:
+            rows.append(
+                {
+                    "academic_year_id": str(e.academic_year_id),
+                    "academic_year": e.academic_year.name,
+                    "status": e.academic_year.status,
+                    "start_date": e.academic_year.start_date.isoformat(),
+                    "end_date": e.academic_year.end_date.isoformat(),
+                    "class": e.school_class.name,
+                    "section": e.section.name if e.section else "",
+                    "outcome": e.outcome,
+                    "results": sorted(by_year.pop(e.academic_year_id, []), key=lambda r: r["sequence"]),
+                }
+            )
+        return _ok(years=rows, is_student=True)
 
 
 class _RolloverBase(TenantScopedAPIView):

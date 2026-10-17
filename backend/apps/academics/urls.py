@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .year_views import AcademicYearContextView, RolloverExecuteView, RolloverPreviewView, RolloverRunsView
+from .year_views import AcademicYearContextView, MyYearHistoryView, RolloverExecuteView, RolloverPreviewView, RolloverRunsView
 
 from .submissions import MyAssessmentFileDetailView, MyAssessmentFilesView
 from .views import (
@@ -83,6 +83,7 @@ urlpatterns = [
         name="class-overall-results",
     ),
     path("year-context/", AcademicYearContextView.as_view(), name="year-context"),
+    path("my-year-history/", MyYearHistoryView.as_view(), name="my-year-history"),
     path("year-rollover/preview/", RolloverPreviewView.as_view(), name="year-rollover-preview"),
     path("year-rollover/execute/", RolloverExecuteView.as_view(), name="year-rollover-execute"),
     path("year-rollover/runs/", RolloverRunsView.as_view(), name="year-rollover-runs"),

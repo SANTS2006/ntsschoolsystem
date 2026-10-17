@@ -29,7 +29,8 @@ import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
 import { useAcademicYearList, useArchiveAcademicYear, useDeleteAcademicYear, useUnarchiveAcademicYear } from "./useAcademicsCrud";
-import { useActivateYear } from "./useYearContext";
+import { useActivateYear, useYearContext } from "./useYearContext";
+import { hasEnded } from "./yearEnded";
 
 const PAGE_SIZE = 25;
 
@@ -59,6 +60,7 @@ export function AcademicYearsListPage() {
   const archiveAcademicYear = useArchiveAcademicYear();
   const unarchiveAcademicYear = useUnarchiveAcademicYear();
   const activateYear = useActivateYear();
+  const { data: yearContext } = useYearContext();
 
   const handleDelete = async (id: string, name: string) => {
     const ok = await confirm({
@@ -106,6 +108,19 @@ export function AcademicYearsListPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {canUpdate && hasEnded(yearContext?.active) && (
+        <Alert tone="warning">
+          {yearContext?.active?.name} ended on {yearContext?.active?.end_date}. Run the{" "}
+          <button type="button" className="font-semibold underline" onClick={() => navigate("/academics/years/rollover")}>
+            year rollover
+          </button>{" "}
+          to move students and settings into the next year.
+        </Alert>
+      )}
+      <Alert tone="info">
+        A closed year is read-only for most people. The principal, school administrator and exams director can still correct its records if a
+        mistake is found later; every such change is recorded in the audit log.
+      </Alert>
       {stats && (
         <ScrollReveal>
           <StatRow

@@ -202,7 +202,7 @@ class TestPreview:
         foreign = api_client.post(f"{API}/year-rollover/preview/", {"source": str(world["y1"].pk), "target": str(AcademicYearFactory(school=SchoolFactory()).pk)}, format="json")
         assert same.status_code == backwards.status_code == foreign.status_code == 400
 
-    def test_a_target_without_terms_is_warned_about(self, api_client, world):
+    def test_a_target_without_terms_is_warned_about_and_offered_a_copy(self, api_client, world):
         Term.unscoped_objects.filter(pk=world["t2"].pk).delete()
         _login(api_client, world["principal"])
         preview = api_client.post(f"{API}/year-rollover/preview/", {"source": str(world["y1"].pk), "target": str(world["y2"].pk)}, format="json").data["preview"]
@@ -364,7 +364,7 @@ class TestActivation:
     def test_it_needs_terms(self, api_client, world):
         Term.unscoped_objects.filter(pk=world["t2"].pk).delete()
         _login(api_client, world["principal"])
-        _rollover(api_client, world)
+        _rollover(api_client, world, options={"terms": False})
         response = api_client.post(f"{API}/academic-years/{world['y2'].pk}/activate/")
         assert response.status_code == 400 and "term" in response.data["message"].lower()
 
@@ -418,7 +418,11 @@ class TestClosedYears:
         api_client.post(f"{API}/academic-years/{world['y2'].pk}/activate/")
 
     def test_ordinary_writes_to_the_closed_year_are_rejected(self, api_client, world):
+        from apps.authorization.models import RolePermission
+
         self._roll(api_client, world)
+        # The principal may correct closed years by default (TestClosedYearCorrections); take that away to see the ordinary rule.
+        RolePermission.unscoped_objects.filter(role__school=world["school"], role__slug="principal", permission__code="academics.correct_closed_year").delete()
         closed = api_client.post(f"{API}/sections/", {"school_class": str(world["g1"].pk), "academic_year": str(world["y1"].pk), "name": "Z", "capacity": 30}, format="json")
         assert closed.status_code == 400 and "archived" in str(closed.data).lower()
         open_year = api_client.post(f"{API}/sections/", {"school_class": str(world["g1"].pk), "academic_year": str(world["y2"].pk), "name": "Z", "capacity": 30}, format="json")
@@ -733,3 +737,151 @@ class TestEndToEnd:
         _login(api_client, world["principal"])
         assert api_client.get("/api/v1/students/", {"academic_year": str(world["y1"].pk)}).data["count"] == 3
         assert AcademicYear.unscoped_objects.get(school=school, is_current=True).pk == world["y2"].pk
+
+
+# ---- authorised corrections in a closed year ---------------------------------------------------------------------------------
+
+class TestClosedYearCorrections:
+    """The principal, school administrator and exams director can fix mistakes in a closed year; everyone else cannot;
+    every correction is audited."""
+
+    def _close_y1(self, api_client, world):
+        _login(api_client, world["principal"])
+        _rollover(api_client, world)
+        api_client.post(f"{API}/academic-years/{world['y2'].pk}/activate/")
+        api_client.post("/api/v1/auth/logout/")
+
+    def _closed_section_body(self, world, name="Z"):
+        return {"school_class": str(world["g1"].pk), "academic_year": str(world["y1"].pk), "name": name, "capacity": 30}
+
+    @pytest.mark.parametrize("slug", ["principal", "school-administrator"])
+    def test_academic_administrators_can_correct_a_closed_year_and_it_is_audited(self, api_client, world, slug):
+        self._close_y1(api_client, world)
+        _login(api_client, _staff(world["school"], slug))
+        response = api_client.post(f"{API}/sections/", self._closed_section_body(world), format="json")
+        assert response.status_code == 201, response.data
+        entry = AuditLog.objects.filter(action="academics.closed_year_correction").latest("created_at")
+        assert entry.metadata["years"] == ["2026/2027"] and entry.metadata["method"] == "POST" and entry.actor_email
+
+    def test_the_exams_director_can_correct_exams_and_marks_of_a_closed_year(self, api_client, world):
+        from tests.factories import ExamFactory, GradingScaleFactory
+
+        scale = GradingScaleFactory(school=world["school"])
+        exam = ExamFactory(school=world["school"], term=world["t1"], grading_scale=scale)
+        self._close_y1(api_client, world)
+        director = _staff(world["school"], "exams-director")
+        _login(api_client, director)
+        body = {"name": "Mid-term (corrected)", "exam_type": "exam", "term": str(world["t1"].pk), "grading_scale": str(scale.pk), "start_date": "2026-10-01", "end_date": "2026-10-05"}
+        assert api_client.put(f"/api/v1/examinations/exams/{exam.pk}/", body, format="json").status_code == 200
+        assert AuditLog.objects.filter(action="academics.closed_year_correction", actor=director).exists()
+
+    @pytest.mark.parametrize("slug", ["teacher", "accountant", "student"])
+    def test_everyone_else_still_cannot(self, api_client, world, slug):
+        self._close_y1(api_client, world)
+        user = _staff(world["school"], slug)
+        _login(api_client, user)
+        response = api_client.post(f"{API}/sections/", self._closed_section_body(world), format="json")
+        assert response.status_code in (400, 403)
+        assert not Section.unscoped_objects.filter(name="Z").exists()
+        assert not AuditLog.objects.filter(action="academics.closed_year_correction").exists()
+
+    def test_the_refusal_tells_people_who_can_fix_it(self, api_client, world):
+        self._close_y1(api_client, world)
+        # A teacher cannot create sections at all, so use an accountant-visible closed-year write: fee plan in the closed year.
+        _login(api_client, _staff(world["school"], "accountant"))
+        response = api_client.post(f"/api/v1/finance/fee-structures/", {"name": "Late plan", "academic_year": str(world["y1"].pk)}, format="json")
+        assert response.status_code == 400 and "principal" in str(response.data).lower()
+
+    def test_reading_a_closed_year_is_never_audited_as_a_correction(self, api_client, world):
+        self._close_y1(api_client, world)
+        _login(api_client, world["principal"])
+        api_client.get(f"{API}/sections/", {"academic_year": str(world["y1"].pk)})
+        assert not AuditLog.objects.filter(action="academics.closed_year_correction").exists()
+
+    def test_the_context_tells_the_interface_who_may_correct(self, api_client, world):
+        _login(api_client, _staff(world["school"], "teacher"))
+        assert api_client.get(f"{API}/year-context/").data["can_correct_closed_years"] is False
+        api_client.post("/api/v1/auth/logout/")
+        _login(api_client, _staff(world["school"], "exams-director"))
+        assert api_client.get(f"{API}/year-context/").data["can_correct_closed_years"] is True
+
+    def test_assignments_of_a_closed_year_are_read_only_for_teachers_and_students(self, api_client, world):
+        from tests.factories import AssignmentFactory
+
+        teacher_user = _staff(world["school"], "teacher")
+        staff = StaffFactory(school=world["school"], user=teacher_user)
+        assignment = AssignmentFactory(school=world["school"], teacher=staff, school_class=world["g1"], section=world["s1a"])
+        self._close_y1(api_client, world)
+        _login(api_client, teacher_user)
+        edited = api_client.patch(f"/api/v1/assignments/{assignment.pk}/", {"title": "Changed"}, format="json")
+        assert edited.status_code == 400 and "archived" in str(edited.data).lower()
+        assert api_client.delete(f"/api/v1/assignments/{assignment.pk}/").status_code == 400
+        assert type(assignment).unscoped_objects.get(pk=assignment.pk).title != "Changed"
+
+
+# ---- a student's own history -------------------------------------------------------------------------------------------------
+
+class TestMyYearHistory:
+    def test_a_student_sees_their_own_years_and_nothing_else(self, api_client, world):
+        school = world["school"]
+        user = _staff(school, "student")
+        Student.unscoped_objects.filter(pk=world["pass_student"].pk).update(user=user)
+        _login(api_client, world["principal"])
+        _rollover(api_client, world)
+        api_client.post(f"{API}/academic-years/{world['y2'].pk}/activate/")
+        api_client.post("/api/v1/auth/logout/")
+
+        _login(api_client, user)
+        body = api_client.get(f"{API}/my-year-history/").data
+        assert body["is_student"] is True
+        assert [(y["academic_year"], y["class"], y["status"], y["outcome"]) for y in body["years"]] == [
+            ("2027/2028", "Grade 2", "active", ""),
+            ("2026/2027", "Grade 1", "closed", "promoted"),
+        ]
+        assert world["repeat_student"].last_name  # (other students exist but never appear)
+
+    def test_staff_get_an_empty_answer_and_anonymous_users_are_refused(self, api_client, world):
+        assert api_client.get(f"{API}/my-year-history/").status_code in (401, 403)
+        _login(api_client, world["principal"])
+        body = api_client.get(f"{API}/my-year-history/").data
+        assert body["is_student"] is False and body["years"] == []
+
+
+# ---- copying the terms ------------------------------------------------------------------------------------------------------------
+
+class TestTermCopy:
+    def test_terms_are_copied_with_shifted_dates_then_offerings_follow_and_activation_works(self, api_client, world):
+        Term.unscoped_objects.filter(pk=world["t2"].pk).delete()
+        _login(api_client, world["principal"])
+        response = _rollover(api_client, world)
+        assert response.status_code == 200, response.data
+        summary = response.data["run"]["summary"]["configuration"]
+        assert summary["terms"] == {"created": 1, "skipped": 0, "already_had_terms": False}
+        assert summary["subject_offerings"]["created"] == 1 and summary["subject_offerings"]["no_matching_term"] == 0
+        copied = Term.unscoped_objects.get(academic_year=world["y2"])
+        assert (copied.name, copied.sequence) == ("Term 1", 1)
+        assert copied.start_date == date(2027, 9, 1) and copied.end_date == date(2027, 12, 15)  # 2026-09-01 .. 2026-12-15 moved +1 year
+        assert copied.is_current is False
+        assert api_client.post(f"{API}/academic-years/{world['y2'].pk}/activate/").status_code == 200
+        assert Term.unscoped_objects.get(pk=copied.pk).is_current is True
+
+    def test_existing_terms_are_never_duplicated_or_replaced(self, api_client, world):
+        _login(api_client, world["principal"])
+        summary = _rollover(api_client, world).data["run"]["summary"]["configuration"]["terms"]
+        assert summary["already_had_terms"] is True and summary["created"] == 0
+        assert Term.unscoped_objects.filter(academic_year=world["y2"]).count() == 1
+
+    def test_the_copy_can_be_switched_off(self, api_client, world):
+        Term.unscoped_objects.filter(pk=world["t2"].pk).delete()
+        _login(api_client, world["principal"])
+        _rollover(api_client, world, options={"terms": False})
+        assert not Term.unscoped_objects.filter(academic_year=world["y2"]).exists()
+
+    def test_terms_that_do_not_fit_the_new_year_are_skipped_and_reported(self, api_client, world):
+        Term.unscoped_objects.filter(pk=world["t2"].pk).delete()
+        TermFactory(school=world["school"], academic_year=world["y1"], name="Term 9", sequence=9, start_date=date(2027, 7, 1), end_date=date(2027, 7, 30))
+        AcademicYear.unscoped_objects.filter(pk=world["y2"].pk).update(end_date=date(2027, 9, 20))
+        _login(api_client, world["principal"])
+        summary = _rollover(api_client, world).data["run"]["summary"]["configuration"]["terms"]
+        assert summary["skipped"] >= 1
+        assert all(t.start_date < date(2027, 9, 20) and t.end_date <= date(2027, 9, 20) for t in Term.unscoped_objects.filter(academic_year=world["y2"]))

@@ -90,7 +90,13 @@ class TestTimetableEntryCreate:
     def test_cannot_schedule_a_lesson_for_a_section_in_an_archived_year(self, api_client):
         from tests.factories import AcademicYearFactory
 
+        from apps.authorization.models import RolePermission
+
         school, principal = _principal()
+        # The principal may correct a closed year by default; this test is about the ordinary read-only rule.
+        RolePermission.unscoped_objects.filter(
+            role__school=school, role__slug="principal", permission__code="academics.correct_closed_year"
+        ).delete()
         year = AcademicYearFactory(school=school, is_current=False, is_archived=True)
         section = SectionFactory(school=school, academic_year=year)
         period = PeriodFactory(school=school)

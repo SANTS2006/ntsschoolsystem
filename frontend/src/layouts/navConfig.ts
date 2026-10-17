@@ -8,6 +8,7 @@ import {
   BookOpen,
   CalendarCheck,
   CalendarClock,
+  CalendarRange,
   CalendarDays,
   ClipboardList,
   Contact,
@@ -77,6 +78,7 @@ export const NAV_CONFIG: NavItem[] = [
   { to: "/my-id-card", label: "My ID card", icon: IdCard, selfServiceFor: "student-or-staff" },
   { to: "/my-meetings", label: "My meetings", icon: Presentation, selfServiceFor: "student-or-staff" },
   { to: "/my-results", label: "Results", icon: Award, selfServiceFor: "student" },
+  { to: "/my-academic-history", label: "Academic history", icon: CalendarRange, selfServiceFor: "student" },
   { to: "/my-graduation-status", label: "Graduation Status", icon: GraduationCap, selfServiceFor: "student" },
   { to: "/my-attendance", label: "My Attendance", icon: CalendarCheck, selfServiceFor: "student" },
   {

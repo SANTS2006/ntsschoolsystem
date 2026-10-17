@@ -75,8 +75,8 @@ filters; see section 11.
 | Read history | any of the school's own years via `?academic_year=`, subject to the endpoint's normal permission | `resolve_year`; students list + `students/<id>/enrollments/` |
 | Create day-to-day records (attendance) | **active year only** | `assert_year_is_active` (attendance create + bulk-mark) |
 | Prepare configuration (sections, offerings, terms, fee plans, timetables) | active **or upcoming** year; never closed | `assert_year_not_archived` |
-| Modify/delete in a **closed** year | rejected for ordinary writes: sections, terms, offerings, attendance, timetable, fee plans, invoices **and now CA scores, exam scores, assessments and exams** | `assert_year_not_archived` at service + serializer choke points |
-| Correct a closed year | explicit, audited: `unarchive` (needs `academics.update`), correct, re-archive | `academics.year_unarchived` audit entry |
+| Modify/delete in a **closed** year | rejected for ordinary users: sections, terms, offerings, attendance, timetable, fee plans, invoices, CA scores, exam scores, assessments, exams, **assignments (and their grading and submission), quizzes and live lessons** | `assert_year_not_archived` at service + serializer choke points |
+| Correct a closed year | **the principal, school administrator and exams director** (permission `academics.correct_closed_year`, held by those three roles by default and assignable to any role on the role screen) can make the correction directly, within what their ordinary permissions allow; every successful change is written to the audit log as `academics.closed_year_correction` with the year(s), method and path. Un-archiving a whole year (`unarchive`) remains for large clean-ups | request-scoped `YearCorrection` (set after authentication in `TenantContextMixin`, evaluated lazily); audited in `finalize_response` |
 | Delete a year | refused for the active year and for any year that has enrolments, rollover history, promotion records, invoices, fee plans or offerings (deleting such a year would cascade away invoices and payments); only an unused year can go | `year_services.deletion_blocker` → HTTP 409 |
 | Payments / refunds on old invoices | **allowed** (arrears must stay collectable); only creating/editing invoices and fee plans in a closed year is blocked | unchanged finance rules |
 | Rollover, activation | `academics.update` only | `year_views`, tests for teacher/student/accountant/outsider |
@@ -89,7 +89,7 @@ filters; see section 11.
    cannot decide (incomplete results, public-exam class, no next class) the student is **"needs a decision"** — nothing is assumed. Also: configuration
    to copy, outstanding balances (read-only), warnings (no terms, students with no class recorded).
 3. **Configure + progress** (`POST /academics/year-rollover/execute/`, `{source, target, decisions, options}`), atomic:
-   copy sections (same class/name/capacity/class teacher), subject offerings (grading configuration + teachers, matched to the new year's terms **by term order**; no scores, assessments or enrolments),
+   copy **terms** (only if the new year has none: same names/order, dates moved to the new year and kept inside it), sections (same class/name/capacity/class teacher), subject offerings (grading configuration + teachers, matched to the new year's terms **by term order**; no scores, assessments or enrolments),
    fee plans (new plans named with the new year, **no invoices or payments**); then apply each student's outcome:
    * *promote / repeat* → new-year enrolment (+ matching new-year section by name), `PromotionRecord`, `Student.current_*` moved; the old enrolment keeps its row and gets `outcome`;
    * *graduate* → status `graduated`, current pointers cleared, `PromotionRecord` (PROMOTED from a graduation-level class, which is how graduation is already derived);
@@ -120,6 +120,19 @@ administrator of another school, and anonymous/platform-admin users.
 * `YearSelect` on the students list (viewing year only).
 * After rollover/activation every query except auth is invalidated (`refreshAfterYearChange`); the 20-second refetch the app already has covers other open tabs. Queries are keyed per user session; sign-out clears auth.
 
+## 7b. Closed-year corrections and student history (added after the first release)
+
+* **Corrections.** Mistakes noticed in the next year no longer require reopening the whole year. Anyone holding `academics.correct_closed_year`
+  (principal, school administrator, exams director by default) simply edits the record; refusal for everyone else now says who can fix it.
+  The year-context endpoint returns `can_correct_closed_years` so the interface can hint at it. The academic years page explains the rule.
+  Corrections are visible under *Audit log* (action `academics.closed_year_correction`).
+  A correction is limited by the person's normal permissions: the exams director can correct exams and marks but has no right to edit sections, and the principal
+  and school administrator hold no assignments permissions (teachers own those), so closed-year assignments, quizzes and lessons stay read-only for teachers and students
+  and are corrected, if ever needed, by un-archiving the year.
+* **Student history.** *My academic history* (`/my-academic-history`, `GET /academics/my-year-history/`) shows a student their class, section and outcome in every year
+  they were enrolled and links to each year's published term results. It only ever serves the signed-in student's own record.
+* **Year ended hint.** When the active year's end date has passed, the header badge shows "ended" and the academic years page tells administrators to run the rollover.
+
 ## 8. Module coverage matrix
 
 Legend — **Updated**: changed here · **Compatible**: read and judged correct, no change · **Gap**: not done.
@@ -140,10 +153,10 @@ Legend — **Updated**: changed here · **Compatible**: read and judged correct,
 | Fees: invoices/payments/receipts | per year; never moved/copied; payments allowed on old invoices | **Compatible** (verified untouched by rollover) | lifecycle suite |
 | Finance dashboards/reports | cross-year totals by design; reports accept `academic_year_id` | **Compatible** | existing suites |
 | Dashboards (headcounts, sections, term picker) | active-year sections; `current_*`; current term (now guaranteed unique) | **Compatible** | dashboard suite |
-| Assignments / quizzes / live lessons | via term/section | **Compatible** — **Gap:** not blocked in a closed year (no archive guard) |  |
+| Assignments / quizzes / live lessons | via term/section (assignments), subject offering (quizzes), section (live lessons) | **Updated** — closed-year writes blocked (create/edit/delete/grade/submit for assignments; create/delete for quizzes; schedule/edit/delete for live lessons) | assignments: lifecycle suite · quizzes and live lessons: guard added, **no API-level test** |
 | Communications / events / audiences | audience picker uses active-year sections (`audience_views`) | **Compatible** | existing suites |
 | Library, hostel, transport, medical, discipline, documents, records, inventory, procurement, payroll | not year-dependent | **Compatible** (no change needed) | existing suites |
-| Parents / students portals | students see their own records through existing "my-…" endpoints (current year); no separate parent login exists in the product | **Gap:** a student cannot browse their own past years through a dedicated page yet (API `students/<id>/enrollments/` exists for staff) | |
+| Parents / students portals | students see their own records through existing "my-…" endpoints and now a year-by-year history page; no separate parent login exists in the product | **Updated:** *My academic history* page for students (own record only) | lifecycle suite + frontend test |
 | Notifications, push, scheduled/background tasks | not year-dependent. No scheduled job reads the active year | **Compatible** | |
 | Audit log | `year_activated`, `year_rollover_completed`, `year_unarchived` recorded | **Updated** | lifecycle suite |
 | Exports / CSV | follow the list endpoints (so `?academic_year=` applies to the students export) | **Compatible** | |
@@ -156,7 +169,28 @@ atomic failure, skip already-enrolled, withdraw/transfer, class override, foreig
 historical views, enrolment sync, legacy promotion tools, the migration backfill (and its idempotency), attendance only in the active year, one current term, year-deletion protection and a full end-to-end workflow (2026/2027 → 2027/2028, seen by principal, teacher, accountant, student and an outsider).
 See section 10 for the results that were actually obtained and where.
 
-## 10. Results of the runs (filled in from real runs — see the delivery notes below)
+## 10. Results of the runs (17 October 2026)
+
+| Check | Result |
+|---|---|
+| Backend, whole suite, per app, SQLite (`BREVO_API_KEY`/`DAILY_API_KEY` blanked so tests never touch the network) | **846 passed, 4 failed.** The 4 are `apps/backups` restore tests that run Postgres-only SQL; they fail identically on the commit before this work |
+| Year suite `apps/academics/test_year_lifecycle.py` | **71 passed** — single active year, context, preview, rollover, term copy, activation, closed years, **authorised corrections (principal, school administrator, exams director) + audit**, access, history, enrolment sync, legacy promotion tools, backfill, year-deletion protection, **full end-to-end workflow**, student history |
+| Migration test `test_year_migration.py` | passed — runs migrations 0017/0018 against data created under the old schema (duplicate "current" year/term, students, promotions, invoices) |
+| Frontend: `tsc -b`, `oxlint`, vitest | clean, **45 tests passed** (year badge, selector, rollover page decisions/confirmation/activation, student history page, "year ended" hint) |
+| Year suite on **Postgres (Neon)** | earlier runs passed 34+ of the 51 then-existing tests with no assertion failures; the rest never completed because the connection to Neon kept dropping. **The latest additions (corrections, term copy, deletion, end-to-end, migration, history) were not run on Postgres.** Run: `python -m pytest --reuse-db apps/academics/test_year_lifecycle.py apps/academics/test_year_migration.py -q` |
+
+Test hygiene found along the way: the backend tests read the real `.env`, so on a machine with a Brevo key every test that sends e-mail made a **real network call** (slow, and it could e-mail real addresses). Run the suite with `BREVO_API_KEY=` and `DAILY_API_KEY=` blank (the commands above do); a permanent fix in `conftest.py` is a good follow-up.
+
+### 10b. Driven in a real browser (local, throw-away SQLite data — never the real database)
+
+Using the real React app (Vite) against the real Django API with a seeded demo school (3 classes, 5 students, an invoice with a balance, a fee plan, an offering):
+* signed in as a **school administrator**: header badge showed `2026/2027 · Term 1` from the server; academic years list showed Active / Upcoming with the correction notice;
+* **Year rollover** page: chose 2027/2028 → Preview showed 5 students "needs a decision", configuration counts and the outstanding balance (200.00, 1 student); the Run button stayed disabled until every student had an outcome; chose outcomes → confirmation dialog → run reported *3 promoted, 1 repeated, 1 graduated*;
+* **Activate** → confirmation → redirected to the years list: 2027/2028 **Active**, 2026/2027 **Closed**, header badge switched to `2027/2028`;
+* as the same administrator, **edited a closed-year section** (capacity 40 → 45) and saved: it succeeded, and the audit log recorded `academics.closed_year_correction` with the year, method and path (also `year_rollover_completed` and `year_activated`);
+* signed in as the **student**: the new *Academic history* page listed *2027/2028 — Grade 2 · Section A (current)* and *2026/2027 — Grade 1 · Section A — Promoted*.
+Found while doing this (setup, not product bugs): the local dev proxy origin needed trusting for CSRF, and my seed script linked the student account with a tenant-scoped query that silently updated nothing.
+Not driven: the principal's sign-in (2FA is mandatory for that role), a phone-sized layout, other browsers.
 
 ## 11. Known limitations and things not verified
 
@@ -164,12 +198,12 @@ See section 10 for the results that were actually obtained and where.
 * Backfill is built only from recorded evidence (current class/year and promotion records). Students with a class but no year, or neither, get **no** enrolment and are counted in the migration output
   ("N non-applicant student(s) have no enrolment") for manual review. Historical *section* is only filled when it can be proven consistent.
 * Cross-table consistency (attendance/timetable/exam rows vs enrolment year) is enforced in application code and filters, not by composite foreign keys.
-* Assignments, quizzes and live lessons are not blocked in closed years; no API-level test for exams.
-* No page lets a student/parent browse earlier years of their own record yet (only staff via the students list/enrolment history). There is no parent login in the product.
+* Quizzes and live lessons now have the closed-year guard but no API-level tests; exams are guarded and tested through the exams director's correction test only.
+* There is no parent login in the product, so guardians cannot browse a child's history.
 * Timetables, assignments, library/hostel allocations and similar are not copied by the rollover.
 * Teachers' historical access is limited by the existing teacher scoping (classes they teach *now*).
 * The rollover runs in one database transaction; for a very large school (many thousands of students) on a small Render instance this should be tried on a staging copy first. A chunked, resumable mode was not built.
-* The frontend has no new automated tests for the rollover page (type-check, lint and the existing 33 tests pass); the page was not driven in a browser against real data.
+* The rollover page now has automated tests (mocked API) **and was driven in a real browser** against a real local backend (see section 10b). It has not been driven against Postgres/Neon or the production deployment.
 
 ## 12. Deployment and migration instructions
 

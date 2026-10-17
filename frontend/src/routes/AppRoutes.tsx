@@ -50,6 +50,7 @@ const MySubjectCommunicationsPage = lazyRetry(() => import("@/features/academics
 const MySubjectLessonsPage = lazyRetry(() => import("@/features/academics/MySubjectLessonsPage").then((m) => ({ default: m.MySubjectLessonsPage })));
 const MyResultDetailPage = lazyRetry(() => import("@/features/academics/MyResultDetailPage").then((m) => ({ default: m.MyResultDetailPage })));
 const MyGraduationStatusPage = lazyRetry(() => import("@/features/academics/MyGraduationStatusPage").then((m) => ({ default: m.MyGraduationStatusPage })));
+const MyAcademicHistoryPage = lazyRetry(() => import("@/features/academics/MyAcademicHistoryPage").then((m) => ({ default: m.MyAcademicHistoryPage })));
 const MyResultsPage = lazyRetry(() => import("@/features/academics/MyResultsPage").then((m) => ({ default: m.MyResultsPage })));
 const TeacherSubjectLessonsPage = lazyRetry(() => import("@/features/academics/TeacherSubjectLessonsPage").then((m) => ({ default: m.TeacherSubjectLessonsPage })));
 const TeacherSubjectsPage = lazyRetry(() => import("@/features/academics/TeacherSubjectsPage").then((m) => ({ default: m.TeacherSubjectsPage })));
@@ -443,6 +444,7 @@ export function AppRoutes() {
           <Route path="/my-results" element={<MyResultsPage />} />
           <Route path="/my-results/:schoolClassId/:termId" element={<MyResultDetailPage />} />
           <Route path="/my-graduation-status" element={<MyGraduationStatusPage />} />
+          <Route path="/my-academic-history" element={<MyAcademicHistoryPage />} />
           <Route path="/my-attendance" element={<MyAttendancePage />} />
           <Route path="/my-staff-attendance" element={<MyStaffAttendancePage />} />
 
