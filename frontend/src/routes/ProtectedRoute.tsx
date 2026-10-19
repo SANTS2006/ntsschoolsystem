@@ -9,6 +9,27 @@ import { LiveUpdates } from "@/features/notifications/LiveUpdates";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
 import { goTo, schoolPath, useSchoolSlug } from "@/lib/schoolSlug";
 
+/** Shown only when the app cannot even find out who is signed in. It keeps trying by itself (the server may be waking up
+ * or the connection slow), so the person usually never has to press anything. */
+function UnreachableScreen({ onRetry, retrying }: { onRetry: () => void; retrying: boolean }) {
+  useEffect(() => {
+    const timer = window.setInterval(onRetry, 6000);
+    return () => window.clearInterval(timer);
+  }, [onRetry]);
+  return (
+    <div role="alert" className="flex min-h-full flex-col items-center justify-center gap-4 px-4 text-center">
+      <h2 className="text-lg font-semibold text-[var(--color-text)]">We can&apos;t reach the server right now</h2>
+      <p className="max-w-md text-sm text-[var(--color-text-muted)]">
+        Your connection may have dropped, or the service is starting up. You haven&apos;t been signed out. We&apos;ll keep trying and carry on by
+        ourselves as soon as it is back.
+      </p>
+      <Button onClick={onRetry} isLoading={retrying}>
+        Try again
+      </Button>
+    </div>
+  );
+}
+
 export function ProtectedRoute() {
   const location = useLocation();
   const { data: user, isLoading, isError, error, refetch, isFetching } = useCurrentUser();
@@ -47,18 +68,10 @@ export function ProtectedRoute() {
   // and bouncing back and forth looks like a redirect loop. They get a retry screen instead.
   const status = (error as { status?: number } | null)?.status;
   const sessionProblem = isError && (status === 401 || status === 403);
-  if (isError && !sessionProblem) {
-    return (
-      <div role="alert" className="flex min-h-full flex-col items-center justify-center gap-4 px-4 text-center">
-        <h2 className="text-lg font-semibold text-[var(--color-text)]">We can&apos;t reach the server right now</h2>
-        <p className="max-w-md text-sm text-[var(--color-text-muted)]">
-          Your connection may have dropped, or the service is starting up. You haven&apos;t been signed out.
-        </p>
-        <Button onClick={() => void refetch()} isLoading={isFetching}>
-          Try again
-        </Button>
-      </div>
-    );
+  // A hiccup while refreshing who is signed in must never take the page away from someone who is already working: only a
+  // person we have never managed to identify (no cached user at all) gets the "can't reach the server" screen.
+  if (isError && !sessionProblem && !user) {
+    return <UnreachableScreen onRetry={() => void refetch()} retrying={isFetching} />;
   }
 
   if (sessionProblem || !user) {

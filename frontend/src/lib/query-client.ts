@@ -7,7 +7,9 @@ import type { ApiError } from "./api-client";
 function shouldRetry(failureCount: number, error: unknown): boolean {
   const status = (error as ApiError | undefined)?.status;
   if (status !== undefined && status >= 400 && status < 500) return false;
-  return failureCount < 2;
+  // The API client has already retried network failures (with backoff and waiting for the connection to return), so one
+  // more try here is enough; a server error gets two.
+  return failureCount < (status === undefined ? 1 : 2);
 }
 
 export const queryClient = new QueryClient({

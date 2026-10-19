@@ -1,7 +1,8 @@
-import { AlertTriangle, ClipboardCopy, RefreshCw, RotateCcw } from "lucide-react";
-import { Component, type ErrorInfo, type ReactNode, Suspense } from "react";
+import { AlertTriangle, RefreshCw, RotateCcw } from "lucide-react";
+import { Component, type ErrorInfo, type ReactNode, Suspense, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
+import { Button } from "@/components/ui/Button";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { reportClientError } from "@/lib/clientErrors";
 import { isChunkError, reloadForNewVersion } from "@/lib/lazyRetry";
@@ -18,6 +19,39 @@ interface State {
   error: Error | null;
   /** The `resetKey` this state was last reconciled with. */
   seenKey?: string;
+}
+
+/** The two ways out of the recovery screen. Each shows an activity indicator the moment it is pressed, and both are locked
+ * while one is working, so a second tap on a slow phone cannot start a second reload. */
+function RecoveryButtons({ stale, onRetry }: { stale: boolean; onRetry: () => void }) {
+  const [busy, setBusy] = useState<"retry" | "reload" | null>(null);
+  const retry = () => {
+    setBusy("retry");
+    window.setTimeout(() => {
+      onRetry();
+      setBusy(null);
+    }, 700);
+  };
+  const reload = () => {
+    setBusy("reload");
+    window.setTimeout(() => {
+      if (!reloadForNewVersion()) window.location.reload();
+    }, 300);
+  };
+  return (
+    <div className="flex w-full max-w-sm flex-col justify-center gap-2 sm:w-auto sm:max-w-none sm:flex-row">
+      {!stale && (
+        <Button onClick={retry} isLoading={busy === "retry"} disabled={busy !== null}>
+          <RotateCcw className="size-4" aria-hidden="true" />
+          Try again
+        </Button>
+      )}
+      <Button variant={stale ? "primary" : "secondary"} onClick={reload} isLoading={busy === "reload"} disabled={busy !== null}>
+        <RefreshCw className="size-4" aria-hidden="true" />
+        Reload the app
+      </Button>
+    </div>
+  );
 }
 
 /** Catches a crash while rendering (or loading) part of the app and shows a friendly recovery screen, so one broken
@@ -53,9 +87,6 @@ export class ErrorBoundary extends Component<Props, State> {
       this.autoRetried = true;
       window.setTimeout(() => this.setState({ error: null }), 0);
     }
-    this.lastDetails = [`${error.name}: ${error.message}`, error.stack ?? "", info.componentStack ?? "", `at ${window.location.pathname}`]
-      .filter(Boolean)
-      .join("\n");
     reportClientError({
       kind: isChunkError(error) ? "chunk" : "render",
       message: error.message || String(error),
@@ -64,14 +95,7 @@ export class ErrorBoundary extends Component<Props, State> {
     });
   }
 
-  private lastDetails = "";
-
   private retry = () => this.setState({ error: null });
-
-  /** The technical details are never shown on screen; the person can copy them to send to support. */
-  private copyDetails = () => {
-    void navigator.clipboard?.writeText(this.lastDetails).catch(() => undefined);
-  };
 
   render() {
     const { error } = this.state;
@@ -96,38 +120,7 @@ export class ErrorBoundary extends Component<Props, State> {
               : "The page hit an unexpected problem. You can try again, or carry on from another page."}
           </p>
         </div>
-        <div className="flex flex-wrap justify-center gap-2">
-          {!stale && (
-            <button
-              type="button"
-              onClick={this.retry}
-              className="inline-flex h-10 items-center gap-2 rounded-[var(--radius-md)] bg-[image:var(--gradient-primary)] px-4 text-sm font-semibold text-white"
-            >
-              <RotateCcw className="size-4" aria-hidden="true" />
-              Try again
-            </button>
-          )}
-          {!stale && (
-            <button
-              type="button"
-              onClick={this.copyDetails}
-              className="inline-flex h-10 items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 text-sm font-semibold text-[var(--color-text)]"
-            >
-              <ClipboardCopy className="size-4" aria-hidden="true" />
-              Copy error details
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              if (!reloadForNewVersion()) window.location.reload();
-            }}
-            className={`inline-flex h-10 items-center gap-2 rounded-[var(--radius-md)] px-4 text-sm font-semibold ${stale ? "bg-[image:var(--gradient-primary)] text-white" : "border border-[var(--color-border)] text-[var(--color-text)]"}`}
-          >
-            <RefreshCw className="size-4" aria-hidden="true" />
-            Reload the app
-          </button>
-        </div>
+        <RecoveryButtons stale={stale} onRetry={this.retry} />
       </div>
     );
   }

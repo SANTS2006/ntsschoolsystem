@@ -57,3 +57,26 @@ class SoftDeleteModel(models.Model):
         self.is_deleted = False
         self.deleted_at = None
         self.save(update_fields=["is_deleted", "deleted_at"])
+
+
+class IdempotencyRecord(models.Model):
+    """A write request the server has already seen, keyed by the browser's `Idempotency-Key`. When a slow connection makes
+    the browser (or a double click) send the same request again, the repeat gets the first answer back instead of creating a
+    second record. See apps.common.idempotency."""
+
+    class State(models.TextChoices):
+        IN_PROGRESS = "in_progress", "In progress"
+        DONE = "done", "Done"
+
+    key = models.CharField(max_length=64)
+    method = models.CharField(max_length=8)
+    path = models.CharField(max_length=255)
+    state = models.CharField(max_length=12, choices=State.choices, default=State.IN_PROGRESS)
+    status_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    content_type = models.CharField(max_length=100, blank=True)
+    body = models.BinaryField(blank=True, default=b"")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "idempotency_records"
+        constraints = [models.UniqueConstraint(fields=["key", "method", "path"], name="unique_idempotency_request")]

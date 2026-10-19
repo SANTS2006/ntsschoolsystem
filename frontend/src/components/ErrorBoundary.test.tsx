@@ -86,6 +86,9 @@ describe("ErrorBoundary automatic retry", () => {
       </ErrorBoundary>,
     );
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Something went wrong while loading this page"));
-    expect(screen.getByRole("button", { name: /copy error details/i })).toBeInTheDocument();
+    // Exactly two ways out, and no technical details to copy.
+    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reload the app/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /copy error details/i })).not.toBeInTheDocument();
   });
 });

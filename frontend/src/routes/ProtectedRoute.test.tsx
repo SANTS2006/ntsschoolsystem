@@ -75,11 +75,19 @@ describe("ProtectedRoute — authentication initialisation", () => {
     expect(await screen.findByText("sign in page")).toBeInTheDocument();
   });
 
-  it("a network failure is NOT treated as signed out: a retry screen, then the page when the server is back", async () => {
+  it("a brief network failure is retried by itself and never shows as signed out", async () => {
     fetchCurrentUser.mockRejectedValueOnce(apiError(undefined, "NETWORK_ERROR")).mockResolvedValue(user);
     renderApp();
-    expect(await screen.findByRole("alert")).toHaveTextContent("can't reach the server");
+    expect(await screen.findByText("students page", {}, { timeout: 6000 })).toBeInTheDocument();
     expect(screen.queryByText("sign in page")).not.toBeInTheDocument();
+  });
+
+  it("a lasting network failure is NOT treated as signed out: a retry screen, then the page when the server is back", async () => {
+    fetchCurrentUser.mockRejectedValue(apiError(undefined, "NETWORK_ERROR"));
+    renderApp();
+    expect(await screen.findByRole("alert", {}, { timeout: 12000 })).toHaveTextContent("can't reach the server");
+    expect(screen.queryByText("sign in page")).not.toBeInTheDocument();
+    fetchCurrentUser.mockResolvedValue(user);
     await userEvent.click(screen.getByRole("button", { name: /try again/i }));
     expect(await screen.findByText("students page")).toBeInTheDocument();
   });
@@ -87,7 +95,7 @@ describe("ProtectedRoute — authentication initialisation", () => {
   it("a server error (5xx) also gets the retry screen rather than a redirect loop", async () => {
     fetchCurrentUser.mockRejectedValue(apiError(503, "SERVER_ERROR"));
     renderApp();
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(await screen.findByRole("alert", {}, { timeout: 12000 })).toBeInTheDocument();
     expect(screen.queryByText("sign in page")).not.toBeInTheDocument();
   });
 });

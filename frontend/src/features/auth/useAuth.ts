@@ -34,7 +34,12 @@ export function useCurrentUser() {
   return useQuery<CurrentUser, ApiError>({
     queryKey: CURRENT_USER_QUERY_KEY,
     queryFn: fetchCurrentUser,
-    retry: false,
+    // A 401/403 means "not signed in" and is final; anything else (dropped connection, a server waking up) is tried again.
+    retry: (failures, error) => {
+      const status = (error as { status?: number } | null)?.status;
+      return status !== 401 && status !== 403 && failures < 2;
+    },
+    retryDelay: (attempt) => Math.min(1500 * 2 ** attempt, 6000),
   });
 }
 

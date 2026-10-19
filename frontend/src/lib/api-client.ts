@@ -2,10 +2,23 @@ import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
 import { getActingSchool } from "./actingSchool";
 import { getActiveRoleSlug } from "./activeRole";
+import { markFailed, markOk, markRetrying, waitForOnline } from "./connection";
 
 interface RetriableRequestConfig extends InternalAxiosRequestConfig {
   _retriedAfterRefresh?: boolean;
+  _networkRetries?: number;
 }
+
+/** How long to wait before each retry of a request that failed because of the network (not because of a mistake). Jittered
+ * so that many tabs recovering at once do not all knock at the same instant. */
+const RETRY_DELAYS_MS = [900, 2200, 5000, 9000];
+
+function newIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 export interface ApiErrorBody {
   success: false;
@@ -56,6 +69,9 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     if (csrfToken) {
       config.headers.set("X-CSRFToken", csrfToken);
     }
+    // One key per logical write, kept across retries: if a slow connection makes the same write arrive twice (a retry, a
+    // double click), the server recognises it and does it once.
+    if (!config.headers.has("Idempotency-Key")) config.headers.set("Idempotency-Key", newIdempotencyKey());
   }
   // Only ever honored server-side for an actual platform admin (see
   // apps.tenants.mixins.ACTING_SCHOOL_HEADER) — harmless to attach for anyone else.
@@ -85,10 +101,39 @@ function isExcludedFromRefresh(url?: string): boolean {
   return !!url && AUTH_ENDPOINTS_EXCLUDED_FROM_REFRESH.some((path) => url.includes(path));
 }
 
+/** Whether a failed request is worth sending again by itself: the network dropped, the server timed out or was starting
+ * up, or is busy — never a validation or permission problem. Writes are only retried because they carry an idempotency key. */
+function shouldRetryOnNetwork(error: AxiosError<ApiErrorBody>, config: RetriableRequestConfig): boolean {
+  if (error.code === "ERR_CANCELED" || config.signal?.aborted) return false;
+  if ((config._networkRetries ?? 0) >= RETRY_DELAYS_MS.length) return false;
+  const method = (config.method ?? "get").toLowerCase();
+  const safe = method === "get" || method === "head" || config.headers?.has?.("Idempotency-Key");
+  if (!safe || isExcludedFromRefresh(config.url)) return false;
+  const status = error.response?.status;
+  if (!error.response) return true; // network error or timeout
+  if (status === 502 || status === 503 || status === 504 || status === 429) return true;
+  return status === 409 && error.response.data?.code === "REQUEST_IN_PROGRESS";
+}
+
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    markOk();
+    return response;
+  },
   async (error: AxiosError<ApiErrorBody>) => {
     const config = error.config as RetriableRequestConfig | undefined;
+
+    if (config && shouldRetryOnNetwork(error, config)) {
+      const attempt = config._networkRetries ?? 0;
+      config._networkRetries = attempt + 1;
+      markRetrying();
+      const retryAfter = Number(error.response?.headers?.["retry-after"]);
+      const base = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter, 10) * 1000 : RETRY_DELAYS_MS[attempt];
+      await sleep(base * (0.75 + Math.random() * 0.5));
+      await waitForOnline(20_000);
+      return apiClient(config);
+    }
+    if (config && !error.response) markFailed();
 
     if (
       error.response?.status === 401 &&

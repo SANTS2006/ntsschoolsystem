@@ -67,7 +67,17 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       return () => window.clearTimeout(timer);
     }, [watching, inFlight]);
 
+    // Double taps happen all the time on slow phones (nothing seems to happen, so people press again). A second click right
+    // after the first is ignored; the server independently refuses to repeat the same write (see lib/api-client).
+    const lastClick = useRef(0);
+
     const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
+      const now = Date.now();
+      if (now - lastClick.current < 500) {
+        event.preventDefault();
+        return;
+      }
+      lastClick.current = now;
       const result: unknown = onClick?.(event);
       if (result && typeof (result as Promise<unknown>).then === "function") {
         setAwaitingHandler(true);
