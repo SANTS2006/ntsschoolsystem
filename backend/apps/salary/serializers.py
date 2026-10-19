@@ -1,6 +1,13 @@
 from rest_framework import serializers
 
-from .models import SalaryPayment, SalaryStructure, SalaryStructureItem, StaffSalaryAssignment
+from .models import (
+    SalaryAdjustment,
+    SalaryPayment,
+    SalaryPaymentLine,
+    SalaryStructure,
+    SalaryStructureItem,
+    StaffSalaryAssignment,
+)
 
 
 class SalaryStructureSerializer(serializers.ModelSerializer):
@@ -87,3 +94,56 @@ class GenerateSalaryPaymentsSerializer(serializers.Serializer):
 class RecordSalaryPaymentSerializer(serializers.Serializer):
     method = serializers.ChoiceField(choices=SalaryPayment.Method.choices)
     reference = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class SalaryPaymentLineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalaryPaymentLine
+        fields = ["id", "line_type", "description", "amount", "source"]
+
+
+class SalaryPaymentDetailSerializer(SalaryPaymentSerializer):
+    """A payment with its line-by-line breakdown (what the receipt shows)."""
+
+    lines = serializers.SerializerMethodField()
+
+    def get_lines(self, obj):
+        from .services import sort_lines
+
+        return SalaryPaymentLineSerializer(sort_lines(list(SalaryPaymentLine.unscoped_objects.filter(salary_payment=obj))), many=True).data
+
+    class Meta(SalaryPaymentSerializer.Meta):
+        fields = SalaryPaymentSerializer.Meta.fields + ["lines"]
+
+
+class SalaryAdjustmentSerializer(serializers.ModelSerializer):
+    staff_name = serializers.CharField(source="staff.user.full_name", read_only=True)
+    created_by_name = serializers.CharField(source="created_by.full_name", read_only=True, default=None)
+    applied = serializers.SerializerMethodField()
+    payment_status = serializers.CharField(source="salary_payment.status", read_only=True, default=None)
+
+    class Meta:
+        model = SalaryAdjustment
+        fields = [
+            "id", "staff", "staff_name", "kind", "amount", "reason", "period_year", "period_month",
+            "applied", "payment_status", "created_by_name", "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+    def get_applied(self, obj):
+        return obj.salary_payment_id is not None
+
+    def validate_staff(self, value):
+        if value.school_id != self.context["request"].user.school_id:
+            raise serializers.ValidationError("Staff must belong to your own school.")
+        return value
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("The amount must be more than zero.")
+        return value
+
+    def validate_reason(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("State the reason.")
+        return value.strip()

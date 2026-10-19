@@ -104,6 +104,7 @@ const BackupsPage = lazyRetry(() => import("@/features/backups/BackupsPage").the
 const LoginPage = lazyRetry(() => import("@/features/auth/LoginPage").then((m) => ({ default: m.LoginPage })));
 const TwoFactorPage = lazyRetry(() => import("@/features/auth/TwoFactorPage").then((m) => ({ default: m.TwoFactorPage })));
 const ResetPasswordPage = lazyRetry(() => import("@/features/auth/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
+const AnnouncementDetailPage = lazyRetry(() => import("@/features/communications/AnnouncementDetailPage").then((m) => ({ default: m.AnnouncementDetailPage })));
 const AnnouncementFormPage = lazyRetry(() => import("@/features/communications/AnnouncementFormPage").then((m) => ({ default: m.AnnouncementFormPage })));
 const AnnouncementsListPage = lazyRetry(() => import("@/features/communications/AnnouncementsListPage").then((m) => ({ default: m.AnnouncementsListPage })));
 const RecipientFormPage = lazyRetry(() => import("@/features/communications/RecipientFormPage").then((m) => ({ default: m.RecipientFormPage })));
@@ -160,7 +161,13 @@ const PaymentFormPage = lazyRetry(() => import("@/features/finance/PaymentFormPa
 const PaymentReceiptPage = lazyRetry(() => import("@/features/finance/PaymentReceiptPage").then((m) => ({ default: m.PaymentReceiptPage })));
 const PaymentsListPage = lazyRetry(() => import("@/features/finance/PaymentsListPage").then((m) => ({ default: m.PaymentsListPage })));
 const RefundFormPage = lazyRetry(() => import("@/features/finance/RefundFormPage").then((m) => ({ default: m.RefundFormPage })));
-const GenerateSalaryPaymentsPage = lazyRetry(() => import("@/features/salary/GenerateSalaryPaymentsPage").then((m) => ({ default: m.GenerateSalaryPaymentsPage })));
+const MyFeesPage = lazyRetry(() => import("@/features/finance/MyFeesPage").then((m) => ({ default: m.MyFeesPage })));
+const MyFeeReceiptPage = lazyRetry(() => import("@/features/finance/MyFeeReceiptPage").then((m) => ({ default: m.MyFeeReceiptPage })));
+const MySalaryPage = lazyRetry(() => import("@/features/salary/MySalaryPage").then((m) => ({ default: m.MySalaryPage })));
+const MySalaryReceiptPage = lazyRetry(() => import("@/features/salary/MySalaryReceiptPage").then((m) => ({ default: m.MySalaryReceiptPage })));
+const AdjustmentsListPage = lazyRetry(() => import("@/features/salary/AdjustmentsListPage").then((m) => ({ default: m.AdjustmentsListPage })));
+const AdjustmentFormPage = lazyRetry(() => import("@/features/salary/AdjustmentFormPage").then((m) => ({ default: m.AdjustmentFormPage })));
+const GenerateSalaryPaymentsPage =lazyRetry(() => import("@/features/salary/GenerateSalaryPaymentsPage").then((m) => ({ default: m.GenerateSalaryPaymentsPage })));
 const PaySalaryPaymentPage = lazyRetry(() => import("@/features/salary/PaySalaryPaymentPage").then((m) => ({ default: m.PaySalaryPaymentPage })));
 const SalaryIndexRedirect = lazyRetry(() => import("@/features/salary/SalaryIndexRedirect").then((m) => ({ default: m.SalaryIndexRedirect })));
 const SalaryLayout = lazyRetry(() => import("@/features/salary/SalaryLayout").then((m) => ({ default: m.SalaryLayout })));
@@ -387,6 +394,7 @@ export function AppRoutes() {
 
           <Route path="/communications" element={<AnnouncementsListPage />} />
           <Route path="/communications/new" element={<AnnouncementFormPage />} />
+          <Route path="/communications/:id" element={<AnnouncementDetailPage />} />
           <Route path="/communications/:id/edit" element={<FormModal list={<AnnouncementsListPage />} large><AnnouncementFormPage /></FormModal>} />
           <Route path="/communications/:announcementId/recipients" element={<RecipientsListPage />} />
           <Route path="/communications/:announcementId/recipients/new" element={<FormModal list={<RecipientsListPage />}><RecipientFormPage /></FormModal>} />
@@ -441,6 +449,10 @@ export function AppRoutes() {
           <Route path="/my-subjects/:id/ca/:assessmentId" element={<MyAssessmentDetailPage />} />
           <Route path="/my-subjects/:id/lessons" element={<MySubjectLessonsPage />} />
           <Route path="/my-subjects/:id/communications" element={<MySubjectCommunicationsPage />} />
+          <Route path="/my-fees" element={<MyFeesPage />} />
+          <Route path="/my-fees/receipts/:id" element={<MyFeeReceiptPage />} />
+          <Route path="/my-salary" element={<MySalaryPage />} />
+          <Route path="/my-salary/receipts/:id" element={<MySalaryReceiptPage />} />
           <Route path="/my-results" element={<MyResultsPage />} />
           <Route path="/my-results/:schoolClassId/:termId" element={<MyResultDetailPage />} />
           <Route path="/my-graduation-status" element={<MyGraduationStatusPage />} />
@@ -625,6 +637,8 @@ export function AppRoutes() {
             <Route path="payments/:id/pay" element={<PaySalaryPaymentPage />} />
             <Route path="payments/:id/receipt" element={<SalaryPaymentReceiptPage />} />
             <Route path="generate" element={<GenerateSalaryPaymentsPage />} />
+            <Route path="adjustments" element={<AdjustmentsListPage />} />
+            <Route path="adjustments/new" element={<FormModal list={<AdjustmentsListPage />}><AdjustmentFormPage /></FormModal>} />
             <Route path="structures" element={<SalaryStructuresListPage />} />
             <Route path="structures/new" element={<FormModal list={<SalaryStructuresListPage />} large><SalaryStructureFormPage /></FormModal>} />
             <Route path="structures/:id/edit" element={<FormModal list={<SalaryStructuresListPage />} large><SalaryStructureFormPage /></FormModal>} />

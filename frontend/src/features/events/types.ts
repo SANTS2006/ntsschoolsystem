@@ -29,6 +29,12 @@ export interface Event extends AudienceFromApi {
   location: string;
   capacity: number | null;
   registered_count: number;
+  /** Optional deadline; registration closes by itself then (and always when the event ends). */
+  registration_closes_at: string | null;
+  /** The creator closed registration by hand. */
+  registration_closed: boolean;
+  registration_state: "open" | "not_published" | "ended" | "closed" | "deadline";
+  registration_open: boolean;
   /** True when the viewer created it — only the creator may edit, publish, cancel or delete it. */
   is_mine: boolean;
   status: EventStatus;
@@ -55,6 +61,8 @@ export interface EventPayload extends Partial<AudiencePayload> {
   end_datetime: string;
   location?: string;
   capacity?: number;
+  /** ISO time; an empty string removes the deadline. */
+  registration_closes_at?: string;
   target_type?: TargetType;
   target_class?: string;
   target_section?: string;

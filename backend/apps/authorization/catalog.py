@@ -10,6 +10,7 @@ PERMISSION_CATALOG = [
     ("students.create", "Create students", "students"),
     ("students.update", "Update students", "students"),
     ("students.delete", "Archive/delete students", "students"),
+    ("students.revoke_access", "Revoke or restore a student's login access", "students"),
     ("attendance.view", "View attendance", "attendance"),
     ("attendance.create", "Record attendance", "attendance"),
     ("attendance.update", "Update attendance records", "attendance"),

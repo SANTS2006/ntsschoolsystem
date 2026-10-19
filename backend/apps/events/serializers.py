@@ -16,6 +16,8 @@ class EventSerializer(AudienceSerializerMixin, serializers.ModelSerializer):
     target_department_name = serializers.CharField(source="target_department.name", read_only=True, default=None)
     created_by_name = serializers.CharField(source="created_by.full_name", read_only=True, default=None)
     registered_count = serializers.IntegerField(read_only=True)
+    registration_state = serializers.CharField(read_only=True)
+    registration_open = serializers.BooleanField(read_only=True)
     # True when the viewer created it — the only person offered Edit / Publish / Cancel / Delete.
     is_mine = serializers.SerializerMethodField()
 
@@ -23,12 +25,13 @@ class EventSerializer(AudienceSerializerMixin, serializers.ModelSerializer):
         model = Event
         fields = [
             "id", "title", "description", "image", "category", "category_label", "start_datetime", "end_datetime", "location",
-            "capacity", "registered_count", "status", "target_type", "target_class", "target_class_name",
+            "capacity", "registered_count", "registration_closes_at", "registration_closed", "registration_state",
+            "registration_open", "status", "target_type", "target_class", "target_class_name",
             "target_section", "target_section_name", "target_department", "target_department_name",
             "created_by", "created_by_name", "is_mine", "created_at", "updated_at",
             *AudienceSerializerMixin.AUDIENCE_FIELDS,
         ]
-        read_only_fields = ["id", "status", "created_by", "created_at", "updated_at"]
+        read_only_fields = ["id", "status", "registration_closed", "created_by", "created_at", "updated_at"]
 
     def get_is_mine(self, obj):
         request = self.context.get("request")
@@ -47,6 +50,9 @@ class EventSerializer(AudienceSerializerMixin, serializers.ModelSerializer):
         end = attrs.get("end_datetime", getattr(self.instance, "end_datetime", None))
         if start and end and end < start:
             raise serializers.ValidationError({"end_datetime": "Must be on or after the start date/time."})
+        closes = attrs.get("registration_closes_at", getattr(self.instance, "registration_closes_at", None))
+        if closes and end and closes > end:
+            raise serializers.ValidationError({"registration_closes_at": "Registration must close on or before the event ends."})
         return attrs
 
     def _same_school(self, value, label):

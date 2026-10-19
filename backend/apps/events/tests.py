@@ -105,3 +105,57 @@ class TestOnlyTheCreatorManagesAnEvent:
         event = _event(school, None)
         _login(api_client, other)
         assert api_client.patch(f"/api/v1/events/{event.id}/", {"title": "Fixed"}, format="json").status_code == 200
+
+
+class TestRegistrationClosing:
+    def _published(self, school, creator, **extra):
+        return _event(school, creator, status=Event.Status.PUBLISHED, **extra)
+
+    def test_no_registration_once_the_event_has_ended(self, api_client):
+        school, creator, other = _world()
+        now = timezone.now()
+        event = Event.unscoped_objects.create(
+            school=school, title="Past", start_datetime=now - timedelta(days=2), end_datetime=now - timedelta(hours=1),
+            created_by=creator, status=Event.Status.PUBLISHED,
+        )
+        _login(api_client, other)
+        response = api_client.post(f"/api/v1/events/{event.id}/register/")
+        assert response.status_code == 400 and response.data["code"] == "EVENT_ENDED"
+        assert api_client.get(f"/api/v1/events/{event.id}/").data["registration_open"] is False
+
+    def test_creator_can_close_and_reopen_registration(self, api_client):
+        school, creator, other = _world()
+        event = self._published(school, creator)
+        _login(api_client, creator)
+        assert api_client.post(f"/api/v1/events/{event.id}/close-registration/").status_code == 200
+        _login(api_client, other)
+        response = api_client.post(f"/api/v1/events/{event.id}/register/")
+        assert response.status_code == 400 and response.data["code"] == "REGISTRATION_CLOSED"
+        _login(api_client, creator)
+        assert api_client.post(f"/api/v1/events/{event.id}/reopen-registration/").status_code == 200
+        _login(api_client, other)
+        assert api_client.post(f"/api/v1/events/{event.id}/register/").status_code in (200, 201)
+
+    def test_only_the_creator_can_close_registration(self, api_client):
+        school, creator, other = _world()
+        event = self._published(school, creator)
+        _login(api_client, other)
+        assert api_client.post(f"/api/v1/events/{event.id}/close-registration/").status_code == 403
+
+    def test_registration_closes_by_itself_at_the_set_time(self, api_client):
+        school, creator, other = _world()
+        event = self._published(school, creator, registration_closes_at=timezone.now() - timedelta(minutes=1))
+        _login(api_client, other)
+        response = api_client.post(f"/api/v1/events/{event.id}/register/")
+        assert response.status_code == 400 and response.data["code"] == "REGISTRATION_CLOSED"
+        event.registration_closes_at = timezone.now() + timedelta(hours=1)
+        event.save()
+        assert api_client.post(f"/api/v1/events/{event.id}/register/").status_code in (200, 201)
+
+    def test_close_time_cannot_be_after_the_event_ends(self, api_client):
+        school, creator, _ = _world()
+        event = self._published(school, creator)
+        _login(api_client, creator)
+        late = (event.end_datetime + timedelta(hours=1)).isoformat()
+        response = api_client.patch(f"/api/v1/events/{event.id}/", {"registration_closes_at": late}, format="json")
+        assert response.status_code == 400

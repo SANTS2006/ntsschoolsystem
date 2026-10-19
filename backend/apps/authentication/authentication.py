@@ -6,6 +6,8 @@ from rest_framework_simplejwt.exceptions import InvalidToken
 
 from apps.common.errors import PasswordChangeRequired
 
+from .access import student_access_revoked
+
 
 class _CSRFCheck(CsrfViewMiddleware):
     def _reject(self, request, reason):
@@ -48,6 +50,8 @@ class CookieJWTAuthentication(JWTAuthentication):
             return None
         self.enforce_csrf(request)
         user = self.get_user(validated_token)
+        if student_access_revoked(user):
+            raise exceptions.AuthenticationFailed("Your access has been suspended. Please contact the school.", code="ACCESS_REVOKED")
         # Which of their roles a multi-role user is working as (see apps.authorization.services.active_role_slug).
         user.active_role_slug = (request.META.get("HTTP_X_ACTIVE_ROLE", "") or "").strip().lower()[:100] or None
         if user.must_change_password and request.path not in self.PASSWORD_CHANGE_ALLOWED_PATHS:

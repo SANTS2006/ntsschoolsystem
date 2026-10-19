@@ -40,6 +40,7 @@ class CurrentUserSerializer(serializers.Serializer):
     needs_role_choice = serializers.SerializerMethodField()
     is_student = serializers.SerializerMethodField()
     is_staff_member = serializers.SerializerMethodField()
+    has_salary = serializers.SerializerMethodField()
     two_factor_enabled = serializers.SerializerMethodField()
     two_factor_required = serializers.SerializerMethodField()
     must_change_password = serializers.BooleanField(read_only=True)
@@ -133,6 +134,12 @@ class CurrentUserSerializer(serializers.Serializer):
         from apps.staff.models import Staff
 
         return Staff.unscoped_objects.filter(user_id=user.pk).exists()
+
+    def get_has_salary(self, user):
+        """Whether this person is on a pay plan, which is what puts "My salary" in their sidebar."""
+        from apps.salary.models import StaffSalaryAssignment
+
+        return StaffSalaryAssignment.unscoped_objects.filter(staff__user_id=user.pk).exists()
 
 
 class MeUpdateSerializer(serializers.ModelSerializer):

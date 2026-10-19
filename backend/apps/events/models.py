@@ -46,6 +46,10 @@ class Event(AudienceFields, TenantScopedModel, TimeStampedModel):
     # Null = unlimited attendance — a school-wide holiday notice has no headcount to cap.
     capacity = models.PositiveIntegerField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    # Registration stops on its own once the event has ended, or earlier at `registration_closes_at` (optional). The
+    # creator can also close it by hand (`registration_closed`) and reopen it while the event has not ended.
+    registration_closes_at = models.DateTimeField(null=True, blank=True)
+    registration_closed = models.BooleanField(default=False)
 
     target_type = models.CharField(max_length=20, choices=TargetType.choices, default=TargetType.SCHOOL)
     target_class = models.ForeignKey(
@@ -72,6 +76,26 @@ class Event(AudienceFields, TenantScopedModel, TimeStampedModel):
     @property
     def registered_count(self):
         return self.registrations.filter(status=EventRegistration.Status.REGISTERED).count()
+
+    @property
+    def registration_state(self) -> str:
+        """"open", or why not: "not_published", "ended", "closed" (by hand) or "deadline" (the close time passed)."""
+        from django.utils import timezone
+
+        now = timezone.now()
+        if self.status != self.Status.PUBLISHED:
+            return "not_published"
+        if self.end_datetime <= now:
+            return "ended"
+        if self.registration_closed:
+            return "closed"
+        if self.registration_closes_at and self.registration_closes_at <= now:
+            return "deadline"
+        return "open"
+
+    @property
+    def registration_open(self) -> bool:
+        return self.registration_state == "open"
 
     def save(self, *args, **kwargs):
         if self.end_datetime < self.start_datetime:

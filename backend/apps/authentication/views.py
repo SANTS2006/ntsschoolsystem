@@ -13,6 +13,7 @@ from apps.audit.services import log_action
 from apps.common.views import TenantScopedAPIView
 
 from . import lockout, services, two_factor
+from .access import student_access_revoked
 from .cookies import clear_auth_cookies, issue_tokens_for_user, set_auth_cookies
 from .serializers import (
     AcceptInvitationSerializer,
@@ -171,6 +172,13 @@ class LoginView(APIView):
             )
             return _invalid_credentials()
 
+        if student_access_revoked(user):
+            log_action(action="auth.login_blocked_access_revoked", actor=user, school=user.school, entity_type="User", entity_id=str(user.pk), severity="warning")
+            return Response(
+                {"success": False, "message": "Your access has been suspended. Please contact the school office.", "code": "ACCESS_REVOKED", "errors": []},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         if user.school_id is not None and not user.school.is_active:
             log_action(
                 action="auth.login_blocked_school_inactive",
@@ -243,7 +251,7 @@ class TokenRefreshView(APIView):
             # A refresh token outlives the account state it was issued under: re-check on every
             # use so a deactivated user, or one whose school has since been suspended, can't keep
             # a session alive indefinitely just by refreshing.
-            if not user.is_active or (user.school_id is not None and not user.school.is_active):
+            if not user.is_active or student_access_revoked(user) or (user.school_id is not None and not user.school.is_active):
                 refresh.blacklist()
                 raise TokenError("Account no longer active.")
             access_token = str(refresh.access_token)

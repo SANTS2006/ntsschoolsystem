@@ -26,6 +26,15 @@ class Student(TenantScopedModel, TimeStampedModel):
         "users.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="student_profile"
     )
 
+    # Login access. Revoking blocks the student's account everywhere (login, refresh, every request) until it is restored;
+    # the record, results and fees are untouched.
+    access_revoked = models.BooleanField(default=False)
+    access_revoked_reason = models.CharField(max_length=500, blank=True)
+    access_revoked_at = models.DateTimeField(null=True, blank=True)
+    access_revoked_by = models.ForeignKey(
+        "users.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
     admission_number = models.CharField(max_length=50)
     first_name = models.CharField(max_length=150)
     middle_name = models.CharField(max_length=150, blank=True)

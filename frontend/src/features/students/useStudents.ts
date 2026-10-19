@@ -5,6 +5,8 @@ import type { LinkGuardianPayload, StudentGuardian } from "@/features/parents/ty
 
 import {
   archiveStudent,
+  restoreStudentAccess,
+  revokeStudentAccess,
   bulkUpdateStudentStatus,
   createStudent,
   fetchStudentGuardians,
@@ -54,6 +56,22 @@ export function useUpdateStudent(id: string) {
       queryClient.invalidateQueries({ queryKey: STUDENTS_KEY });
       queryClient.setQueryData([...STUDENTS_KEY, "detail", id], student);
     },
+  });
+}
+
+export function useRevokeStudentAccess(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation<Student, ApiError, string>({
+    mutationFn: (reason) => revokeStudentAccess(id, reason),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: STUDENTS_KEY }),
+  });
+}
+
+export function useRestoreStudentAccess(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation<Student, ApiError, void>({
+    mutationFn: () => restoreStudentAccess(id),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: STUDENTS_KEY }),
   });
 }
 

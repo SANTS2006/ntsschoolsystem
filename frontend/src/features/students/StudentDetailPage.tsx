@@ -1,4 +1,4 @@
-import { Archive, Pencil, User, UserMinus, UserPlus } from "lucide-react";
+import { Archive, Pencil, ShieldOff, User, UserCheck, UserMinus, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { useConfirm } from "@/components/ui/confirmContext";
+import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { FullPageSpinner, Spinner } from "@/components/ui/Spinner";
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeaderCell, TableRow } from "@/components/ui/Table";
@@ -21,7 +22,15 @@ import type { ApiError } from "@/lib/api-client";
 import { generalErrorMessage } from "@/lib/formErrors";
 
 import { studentStatusTone } from "./statusTone";
-import { useArchiveStudent, useLinkGuardian, useStudent, useStudentGuardians, useUnlinkGuardian } from "./useStudents";
+import {
+  useArchiveStudent,
+  useLinkGuardian,
+  useRestoreStudentAccess,
+  useRevokeStudentAccess,
+  useStudent,
+  useStudentGuardians,
+  useUnlinkGuardian,
+} from "./useStudents";
 
 const RELATIONSHIPS: GuardianRelationship[] = ["mother", "father", "guardian", "other"];
 
@@ -33,6 +42,90 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
         {value || <span className="text-[var(--color-text-muted)]">—</span>}
       </p>
     </div>
+  );
+}
+
+/** Lets the principal / school administrator block a student's login (with a reason) and give it back later. */
+function LoginAccessSection({ studentId, hasAccount, revoked, reason, since }: { studentId: string; hasAccount: boolean; revoked: boolean; reason: string; since: string | null }) {
+  const { showToast } = useToast();
+  const confirm = useConfirm();
+  const revoke = useRevokeStudentAccess(studentId);
+  const restore = useRestoreStudentAccess(studentId);
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const submitRevoke = () => {
+    if (text.trim().length < 5) {
+      setError("State why access is being revoked.");
+      return;
+    }
+    setError(null);
+    revoke.mutate(text.trim(), {
+      onSuccess: () => {
+        showToast({ title: "Login access revoked" });
+        setOpen(false);
+        setText("");
+      },
+      onError: (err: ApiError) => setError(generalErrorMessage(err)),
+    });
+  };
+
+  const submitRestore = async () => {
+    const ok = await confirm({ title: "Restore this student's login?", description: "They will be able to sign in again straight away." });
+    if (!ok) return;
+    restore.mutate(undefined, {
+      onSuccess: () => showToast({ title: "Login access restored" }),
+      onError: (err: ApiError) => showToast({ title: "Could not restore", description: generalErrorMessage(err), tone: "danger" }),
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
+        <CardTitle className="text-base font-semibold">Login access</CardTitle>
+        <Badge tone={revoked ? "danger" : "success"}>{revoked ? "Revoked" : "Allowed"}</Badge>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {!hasAccount ? (
+          <p className="text-sm text-[var(--color-text-muted)]">This student has no login account.</p>
+        ) : revoked ? (
+          <>
+            <p className="text-sm text-[var(--color-text)]">
+              This student cannot sign in{since ? ` (since ${new Date(since).toLocaleDateString()})` : ""}. Reason: {reason}
+            </p>
+            <div>
+              <Button variant="secondary" size="sm" onClick={submitRestore} isLoading={restore.isPending}>
+                <UserCheck className="size-4" aria-hidden="true" />
+                Restore access
+              </Button>
+            </div>
+          </>
+        ) : open ? (
+          <>
+            <Input label="Reason" placeholder="e.g. Fees unpaid for two terms" value={text} onChange={(e) => setText(e.target.value)} error={error ?? undefined} />
+            <div className="flex flex-wrap gap-2">
+              <Button variant="danger" size="sm" onClick={submitRevoke} isLoading={revoke.isPending}>
+                Revoke access
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => { setOpen(false); setError(null); }}>
+                Cancel
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-[var(--color-text-muted)]">Revoking blocks this student from signing in or using the system. Their records are kept, and you can restore access at any time.</p>
+            <div>
+              <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+                <ShieldOff className="size-4" aria-hidden="true" />
+                Revoke login access
+              </Button>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -193,6 +286,7 @@ export function StudentDetailPage() {
   const confirm = useConfirm();
   const canUpdate = useHasPermission("students.update");
   const canDelete = useHasPermission("students.delete");
+  const canRevoke = useHasPermission("students.revoke_access");
 
   const { data: student, isLoading, isError, error } = useStudent(id);
   const archiveStudent = useArchiveStudent();
@@ -290,6 +384,16 @@ export function StudentDetailPage() {
           <Field label="Address" value={student.address} />
         </CardContent>
       </Card>
+
+      {canRevoke && (
+        <LoginAccessSection
+          studentId={student.id}
+          hasAccount={!!student.user}
+          revoked={student.access_revoked}
+          reason={student.access_revoked_reason}
+          since={student.access_revoked_at}
+        />
+      )}
 
       <GuardiansSection studentId={student.id} canUpdate={canUpdate} />
     </div>

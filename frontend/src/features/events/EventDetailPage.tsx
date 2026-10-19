@@ -1,4 +1,4 @@
-import { Calendar, CheckCircle2, Images, Pencil, Send, Trash2, Upload, XCircle } from "lucide-react";
+import { Calendar, CheckCircle2, Images, Lock, Pencil, Send, Trash2, Unlock, Upload, XCircle } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -32,6 +32,7 @@ import {
   useAttendees,
   useCancelEvent,
   useCancelEventRegistration,
+  useCloseEventRegistration,
   useCreateEventMedia,
   useDeleteEvent,
   useDeleteEventMedia,
@@ -39,7 +40,16 @@ import {
   useEventMedia,
   usePublishEvent,
   useRegisterForEvent,
+  useReopenEventRegistration,
 } from "./useEventsCrud";
+
+const REGISTRATION_CLOSED_TEXT = {
+  open: "Open",
+  not_published: "Not open yet",
+  ended: "Closed — the event has ended",
+  closed: "Closed by the organiser",
+  deadline: "Closed — the registration deadline has passed",
+} as const;
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -69,6 +79,8 @@ export function EventDetailPage() {
   const cancelEvent = useCancelEvent();
   const deleteEvent = useDeleteEvent();
   const registerForEvent = useRegisterForEvent();
+  const closeRegistration = useCloseEventRegistration();
+  const reopenRegistration = useReopenEventRegistration();
   const cancelRegistration = useCancelEventRegistration();
   const createMedia = useCreateEventMedia();
   const deleteMedia = useDeleteEventMedia();
@@ -126,6 +138,15 @@ export function EventDetailPage() {
       onSuccess: () => showToast({ title: "You're registered" }),
       onError: (err: ApiError) =>
         showToast({ title: "Could not register", description: generalErrorMessage(err), tone: "danger" }),
+    });
+  };
+
+  const handleToggleRegistration = (close: boolean) => {
+    if (!event) return;
+    (close ? closeRegistration : reopenRegistration).mutate(event.id, {
+      onSuccess: () => showToast({ title: close ? "Registration closed" : "Registration reopened" }),
+      onError: (err: ApiError) =>
+        showToast({ title: "Could not update registration", description: generalErrorMessage(err), tone: "danger" }),
     });
   };
 
@@ -200,6 +221,21 @@ export function EventDetailPage() {
               Publish
             </Button>
           )}
+          {canUpdate && event.is_mine && event.status === "published" && event.registration_state !== "ended" && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handleToggleRegistration(event.registration_state === "open")}
+              isLoading={closeRegistration.isPending || reopenRegistration.isPending}
+            >
+              {event.registration_state === "open" ? (
+                <Lock className="size-4" aria-hidden="true" />
+              ) : (
+                <Unlock className="size-4" aria-hidden="true" />
+              )}
+              {event.registration_state === "open" ? "Close registration" : "Reopen registration"}
+            </Button>
+          )}
           {canUpdate && event.is_mine && event.status === "published" && (
             <Button variant="danger" size="sm" onClick={handleCancel} isLoading={cancelEvent.isPending}>
               <XCircle className="size-4" aria-hidden="true" />
@@ -251,6 +287,16 @@ export function EventDetailPage() {
               .filter(Boolean)
               .join(" — ")}
           />
+          <Field
+            label="Registration"
+            value={
+              event.registration_state === "open"
+                ? event.registration_closes_at
+                  ? `Open until ${new Date(event.registration_closes_at).toLocaleString()}`
+                  : "Open until the event ends"
+                : REGISTRATION_CLOSED_TEXT[event.registration_state]
+            }
+          />
           <Field label="Created by" value={event.created_by_name} />
           {event.description && (
             <div className="sm:col-span-2">
@@ -278,9 +324,18 @@ export function EventDetailPage() {
             ) : (
               <>
                 <p className="text-sm text-[var(--color-text)]">
-                  {isFull ? "This event is full." : "Save your spot for this event."}
+                  {!event.registration_open
+                    ? REGISTRATION_CLOSED_TEXT[event.registration_state]
+                    : isFull
+                      ? "This event is full."
+                      : "Save your spot for this event."}
                 </p>
-                <Button size="sm" onClick={handleRegister} isLoading={registerForEvent.isPending} disabled={isFull}>
+                <Button
+                  size="sm"
+                  onClick={handleRegister}
+                  isLoading={registerForEvent.isPending}
+                  disabled={isFull || !event.registration_open}
+                >
                   <CheckCircle2 className="size-4" aria-hidden="true" />
                   Register
                 </Button>

@@ -24,6 +24,10 @@ export interface Student {
   previous_school: string;
   admission_date: string | null;
   status: StudentStatus;
+  /** The school blocked this student's login (reversible). */
+  access_revoked: boolean;
+  access_revoked_reason: string;
+  access_revoked_at: string | null;
   current_academic_year: string | null;
   current_academic_year_name: string | null;
   current_class: string | null;

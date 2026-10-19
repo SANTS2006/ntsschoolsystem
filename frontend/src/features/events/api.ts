@@ -53,6 +53,16 @@ export async function cancelEvent(id: string): Promise<Event> {
   return data.event;
 }
 
+export async function closeEventRegistration(id: string): Promise<Event> {
+  const { data } = await apiClient.post<{ event: Event }>(`/events/${id}/close-registration/`);
+  return data.event;
+}
+
+export async function reopenEventRegistration(id: string): Promise<Event> {
+  const { data } = await apiClient.post<{ event: Event }>(`/events/${id}/reopen-registration/`);
+  return data.event;
+}
+
 export async function fetchAttendees(id: string): Promise<EventRegistrationStatus[]> {
   const { data } = await apiClient.get<{ attendees: EventRegistrationStatus[] }>(`/events/${id}/attendees/`);
   return data.attendees;

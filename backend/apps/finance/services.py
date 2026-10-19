@@ -5,11 +5,22 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
+from apps.notifications.services import notify
 from apps.parents.services import notify_student_guardians
 
 from .models import FeeStructureItem, Invoice, Payment, Refund
 
 DUPLICATE_PAYMENT_WINDOW_SECONDS = 10
+
+
+def notify_student_and_guardians(student, *, category, title, message, link="", email_subject=None, email_html=None):
+    """Notifies the student's own account (when they have one) AND every guardian with an account. Link points at the student's
+    own fees page; guardians open the same title from their notification. Returns how many people were notified."""
+    count = notify_student_guardians(student, category=category, title=title, message=message, link=link, email_subject=email_subject, email_html=email_html)
+    if student.user_id:
+        notify(recipient=student.user, category=category, title=title, message=message, link=link, email_subject=email_subject, email_html=email_html)
+        count += 1
+    return count
 
 
 class FinanceError(Exception):
@@ -59,12 +70,12 @@ def create_invoice_with_line_items(*, school, student, academic_year, line_items
                 amount=item["amount"],
             )
         invoice.recalculate_amounts()
-        notify_student_guardians(
+        notify_student_and_guardians(
             student,
             category="finance",
             title="New invoice issued",
             message=f"Invoice {invoice.invoice_number} for {invoice.total} has been issued.",
-            link="/finance/invoices",
+            link="/my-fees",
             email_subject=f"New invoice: {invoice.invoice_number}",
             email_html=(
                 f"<p>A new invoice ({invoice.invoice_number}) for {invoice.total} has been issued "
@@ -174,12 +185,12 @@ def record_payment(*, invoice, amount: Decimal, method: str, reference: str = ""
     else:
         invoice.status = Invoice.Status.PARTIALLY_PAID
     invoice.save(update_fields=["amount_paid", "balance", "status", "updated_at"])
-    notify_student_guardians(
+    notify_student_and_guardians(
         invoice.student,
         category="finance",
         title="Payment received",
         message=f"Payment of {amount} received for invoice {invoice.invoice_number} (receipt {payment.receipt_number}).",
-        link="/finance/payments",
+        link="/my-fees",
         email_subject=f"Payment received: {payment.receipt_number}",
         email_html=(
             f"<p>We've received a payment of {amount} against invoice {invoice.invoice_number}.</p>"
@@ -225,3 +236,143 @@ def record_refund(*, payment, amount: Decimal, reason: str, refunded_by=None) ->
     )
     payment.save(update_fields=["status", "updated_at"])
     return refund
+
+
+
+def recalculate_and_notify(invoice, *, change: str) -> None:
+    """Recomputes an invoice after its line items changed and, if the amount the student owes actually changed, tells the student
+    and their guardians what changed and the new figures. (Increments, discounts, waivers and corrections all arrive here.)"""
+    before_total, before_balance = invoice.total, invoice.balance
+    invoice.recalculate_amounts()
+    if invoice.total == before_total:
+        return
+    direction = "increased" if invoice.total > before_total else "reduced"
+    notify_student_and_guardians(
+        invoice.student,
+        category="finance",
+        title="Your fees were updated" if invoice.total > before_total else "Your fees were reduced",
+        message=(
+            f"Invoice {invoice.invoice_number} {direction} from {before_total} to {invoice.total} ({change}). "
+            f"Amount still to pay: {invoice.balance}."
+        ),
+        link="/my-fees",
+        email_subject=f"Invoice {invoice.invoice_number} updated",
+        email_html=(
+            f"<p>Invoice <strong>{invoice.invoice_number}</strong> {direction} from {before_total} to <strong>{invoice.total}</strong> ({change}).</p>"
+            f"<p>Paid so far: {invoice.amount_paid}. Still to pay: <strong>{invoice.balance}</strong>.</p>"
+        ),
+    )
+
+
+REMINDER_COOLDOWN = timedelta(hours=24)
+REMINDABLE = (Invoice.Status.UNPAID, Invoice.Status.PARTIALLY_PAID)
+
+
+def send_fee_reminders(*, invoices, actor=None, note: str = "", force: bool = False) -> dict:
+    """Sends a payment reminder (in-app + e-mail, to the student and guardians) for each invoice that still has a balance.
+    An invoice reminded within the last 24 hours is skipped unless `force` (stops accidental repeat sends and double clicks).
+    Returns counts: sent, skipped_recent, skipped_paid, no_recipient."""
+    sent = skipped_recent = skipped_paid = no_recipient = 0
+    now = timezone.now()
+    note = (note or "").strip()[:500]
+    for invoice in invoices.select_related("student__user", "academic_year", "term"):
+        if invoice.status not in REMINDABLE or invoice.balance <= 0:
+            skipped_paid += 1
+            continue
+        if not force and invoice.last_reminder_at and now - invoice.last_reminder_at < REMINDER_COOLDOWN:
+            skipped_recent += 1
+            continue
+        due = f", due {invoice.due_date:%d %b %Y}" if invoice.due_date else ""
+        overdue = " It is now overdue." if invoice.is_overdue else ""
+        where = f"{invoice.academic_year.name}" + (f" · {invoice.term.name}" if invoice.term_id else "")
+        message = f"Reminder: {invoice.balance} is still unpaid on invoice {invoice.invoice_number} ({where}){due}.{overdue}" + (f" {note}" if note else "")
+        reached = notify_student_and_guardians(
+            invoice.student,
+            category="finance",
+            title="Fee payment reminder",
+            message=message,
+            link="/my-fees",
+            email_subject=f"Fee payment reminder: {invoice.invoice_number}",
+            email_html=(
+                f"<p>This is a reminder that <strong>{invoice.balance}</strong> is still unpaid on invoice {invoice.invoice_number} "
+                f"for {invoice.student.full_name} ({where}){due}.{overdue}</p>"
+                + (f"<p>{note}</p>" if note else "")
+                + "<p>You can see the full breakdown under <em>Fees</em> in the app.</p>"
+            ),
+        )
+        if reached == 0:
+            no_recipient += 1
+            continue
+        Invoice.unscoped_objects.filter(pk=invoice.pk).update(last_reminder_at=now, reminder_count=invoice.reminder_count + 1)
+        sent += 1
+    return {"sent": sent, "skipped_recent": skipped_recent, "skipped_paid": skipped_paid, "no_recipient": no_recipient}
+
+
+def student_fee_statement(student) -> dict:
+    """A student's own fees, grouped by academic year then term, with each invoice's line items and payments (receipts), and
+    overall totals. Cancelled invoices are left out of the totals and the lists."""
+    from collections import OrderedDict
+
+    from .models import InvoiceLineItem
+
+    invoices = list(
+        Invoice.unscoped_objects.filter(student=student)
+        .exclude(status=Invoice.Status.CANCELLED)
+        .select_related("academic_year", "term")
+        .order_by("-academic_year__start_date", "term__sequence", "created_at")
+    )
+    lines_by_invoice, payments_by_invoice = {}, {}
+    for line in InvoiceLineItem.unscoped_objects.filter(invoice__in=invoices).order_by("id"):
+        lines_by_invoice.setdefault(line.invoice_id, []).append(
+            {"description": line.description or line.get_line_type_display(), "line_type": line.line_type, "amount": line.amount}
+        )
+    for payment in Payment.unscoped_objects.filter(invoice__in=invoices).order_by("paid_at"):
+        payments_by_invoice.setdefault(payment.invoice_id, []).append(
+            {"id": str(payment.pk), "receipt_number": payment.receipt_number, "amount": payment.amount, "method": payment.method,
+             "paid_at": payment.paid_at, "status": payment.status}
+        )
+
+    zero = Decimal("0.00")
+    years: "OrderedDict" = OrderedDict()
+    totals = {"billed": zero, "paid": zero, "outstanding": zero, "overdue": zero}
+    for invoice in invoices:
+        year = years.setdefault(
+            invoice.academic_year_id,
+            {"academic_year_id": str(invoice.academic_year_id), "academic_year": invoice.academic_year.name, "status": invoice.academic_year.status,
+             "totals": {"billed": zero, "paid": zero, "outstanding": zero}, "terms": OrderedDict()},
+        )
+        term_key = invoice.term_id or "none"
+        term = year["terms"].setdefault(
+            term_key,
+            {"term_id": str(invoice.term_id) if invoice.term_id else None, "term": invoice.term.name if invoice.term_id else "Whole year",
+             "totals": {"billed": zero, "paid": zero, "outstanding": zero}, "invoices": []},
+        )
+        term["invoices"].append(
+            {
+                "id": str(invoice.pk), "invoice_number": invoice.invoice_number, "status": invoice.status, "due_date": invoice.due_date,
+                "is_overdue": invoice.is_overdue, "subtotal": invoice.subtotal, "discount_total": invoice.discount_total, "total": invoice.total,
+                "amount_paid": invoice.amount_paid, "balance": invoice.balance,
+                "line_items": lines_by_invoice.get(invoice.pk, []), "payments": payments_by_invoice.get(invoice.pk, []),
+            }
+        )
+        for bucket in (year["totals"], term["totals"]):
+            bucket["billed"] += invoice.total
+            bucket["paid"] += invoice.amount_paid
+            bucket["outstanding"] += invoice.balance
+        totals["billed"] += invoice.total
+        totals["paid"] += invoice.amount_paid
+        totals["outstanding"] += invoice.balance
+        if invoice.is_overdue:
+            totals["overdue"] += invoice.balance
+    if not invoices:
+        overall = "none"
+    elif totals["outstanding"] <= 0:
+        overall = "paid"
+    elif totals["overdue"] > 0:
+        overall = "overdue"
+    else:
+        overall = "outstanding"
+    return {
+        "summary": {**totals, "status": overall, "invoice_count": len(invoices)},
+        "years": [{**year, "terms": list(year["terms"].values())} for year in years.values()],
+    }

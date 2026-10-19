@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Clock, FileText, Plus, Search } from "lucide-react";
+import { AlertTriangle, BellRing, CheckCircle2, Clock, FileText, Plus, Search } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -6,6 +6,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { useConfirm } from "@/components/ui/confirmContext";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ExportCsvButton } from "@/components/ui/ExportCsvButton";
 import { Input } from "@/components/ui/Input";
@@ -23,11 +24,13 @@ import {
   TableHeaderCell,
   TableRowLink,
 } from "@/components/ui/Table";
+import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
+import { useRemindInvoice, useSendReminders } from "./reminders";
 import { invoiceStatusTone, statusLabel } from "./statusTone";
 import type { InvoiceStatus } from "./types";
 import { useInvoiceList, useOutstandingInvoiceList } from "./useFeesCrud";
@@ -58,6 +61,33 @@ export function InvoicesListPage() {
   const outstandingQuery = useOutstandingInvoiceList(params, { enabled: outstandingOnly });
   const { data, isLoading, isError, error, isFetching } = outstandingOnly ? outstandingQuery : listQuery;
   const { data: stats } = useSummaryStats("finance/invoices", filterParams);
+  const canRemind = useHasPermission("fees.update");
+  const { showToast } = useToast();
+  const confirm = useConfirm();
+  const sendReminders = useSendReminders();
+  const remindOne = useRemindInvoice();
+
+  const handleRemindAll = async () => {
+    const ok = await confirm({
+      title: "Remind every student with an unpaid balance?",
+      description: "Each student (and their guardians) is notified about their outstanding fees. Anyone reminded in the last 24 hours is skipped.",
+    });
+    if (!ok) return;
+    sendReminders.mutate(
+      {},
+      {
+        onSuccess: (r) => showToast({ title: r.message }),
+        onError: (err) => showToast({ title: "Could not send reminders", description: err.message, tone: "danger" }),
+      },
+    );
+  };
+
+  const handleRemindOne = (id: string, name: string) => {
+    remindOne.mutate(id, {
+      onSuccess: () => showToast({ title: `Reminder sent to ${name}` }),
+      onError: (err) => showToast({ title: "Not sent", description: err.message, tone: "danger" }),
+    });
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -129,7 +159,13 @@ export function InvoicesListPage() {
             }}
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {canRemind && (
+            <Button variant="secondary" onClick={handleRemindAll} isLoading={sendReminders.isPending}>
+              {!sendReminders.isPending && <BellRing className="size-4" aria-hidden="true" />}
+              Remind unpaid
+            </Button>
+          )}
           <ExportCsvButton path="/finance/invoices/" params={filterParams} filename="invoices.csv" />
           {canCreate && (
             <Button onClick={() => navigate("/finance/invoices/new")}>
@@ -158,6 +194,7 @@ export function InvoicesListPage() {
                   <TableHeaderCell>Balance</TableHeaderCell>
                   <TableHeaderCell>Due date</TableHeaderCell>
                   <TableHeaderCell>Status</TableHeaderCell>
+                  {canRemind && <TableHeaderCell className="text-right">Remind</TableHeaderCell>}
                 </tr>
               </TableHead>
               <TableBody>
@@ -176,6 +213,24 @@ export function InvoicesListPage() {
                     <TableCell>
                       <Badge tone={invoiceStatusTone(invoice.status)}>{statusLabel(invoice.status)}</Badge>
                     </TableCell>
+                    {canRemind && (
+                      <TableCell className="text-right">
+                        {Number(invoice.balance) > 0 && invoice.status !== "cancelled" && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemindOne(invoice.id, invoice.student_name);
+                            }}
+                            disabled={remindOne.isPending}
+                            aria-label={`Remind ${invoice.student_name}`}
+                            className="rounded p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-subtle)] hover:text-[var(--color-primary)] disabled:opacity-50"
+                          >
+                            <BellRing className="size-4" aria-hidden="true" />
+                          </button>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRowLink>
                 ))}
               </TableBody>

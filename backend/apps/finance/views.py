@@ -1,4 +1,5 @@
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -7,13 +8,14 @@ from rest_framework.response import Response
 from apps.academics.models import AcademicYear, SchoolClass, Term
 from apps.audit.services import log_action
 from apps.authorization.permissions import require_permission
-from apps.common.views import TenantScopedModelViewSet
+from apps.common.views import TenantScopedAPIView, TenantScopedModelViewSet
 from apps.students.models import Student
 from apps.tenants.services import get_current_school
 
 from . import services
 from .models import FeeCategory, FeeStructure, FeeStructureItem, Invoice, InvoiceLineItem, Payment
 from .serializers import (
+    SendRemindersSerializer,
     FeeCategorySerializer,
     FeeStructureItemSerializer,
     FeeStructureSerializer,
@@ -101,7 +103,7 @@ class InvoiceViewSet(TenantScopedModelViewSet):
     }
 
     def get_permissions(self):
-        action_map = {**_FEES_ACTION_SUFFIX, "generate": "create", "cancel": "update", "outstanding": "view", "stats": "view"}
+        action_map = {**_FEES_ACTION_SUFFIX, "generate": "create", "cancel": "update", "outstanding": "view", "stats": "view", "send_reminders": "update", "remind": "update"}
         code = f"fees.{action_map.get(self.action, 'view')}"
         return [require_permission(code)()]
 
@@ -220,6 +222,54 @@ class InvoiceViewSet(TenantScopedModelViewSet):
         )
         return _ok("Invoice cancelled.", invoice=InvoiceSerializer(invoice).data)
 
+    @action(detail=False, methods=["post"], url_path="send-reminders")
+    def send_reminders(self, request):
+        """Reminds the students (and their guardians) who still owe fees. Takes either explicit `invoice_ids`, or filters (the
+        same ones the invoice list uses: academic_year, term, status, student) plus `only_overdue`. An invoice reminded in the last
+        24 hours is skipped unless `force` is true."""
+        serializer = SendRemindersSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        school = get_current_school()
+        qs = Invoice.objects.filter(status__in=services.REMINDABLE, balance__gt=0)
+        if data.get("invoice_ids"):
+            qs = qs.filter(pk__in=data["invoice_ids"])
+        else:
+            for field in ("academic_year", "term"):
+                if data.get(field):
+                    qs = qs.filter(**{f"{field}_id": data[field]})
+            if data.get("school_class"):
+                qs = qs.filter(student__current_class_id=data["school_class"])
+            if data.get("only_overdue"):
+                qs = qs.filter(due_date__lt=timezone.now().date())
+        result = services.send_fee_reminders(invoices=qs, actor=request.user, note=data.get("note", ""), force=data.get("force", False))
+        log_action(
+            action="fees.reminders_sent", actor=request.user, school=school, entity_type="Invoice", entity_id="", metadata=result,
+        )
+        parts = [f"Reminder sent for {result['sent']} invoice(s)."]
+        if result["skipped_recent"]:
+            parts.append(f"{result['skipped_recent']} skipped: reminded in the last 24 hours.")
+        if result["no_recipient"]:
+            parts.append(f"{result['no_recipient']} skipped: no student or guardian account to notify.")
+        return _ok(" ".join(parts), **result)
+
+    @action(detail=True, methods=["post"])
+    def remind(self, request, pk=None):
+        invoice = self.get_object()
+        result = services.send_fee_reminders(
+            invoices=Invoice.objects.filter(pk=invoice.pk), actor=request.user, note=request.data.get("note", ""), force=bool(request.data.get("force", False))
+        )
+        if result["sent"] == 0:
+            if result["skipped_paid"]:
+                message = "Nothing to remind: this invoice has no balance."
+            elif result["skipped_recent"]:
+                message = "A reminder was already sent in the last 24 hours."
+            else:
+                message = "There is no student or guardian account to notify."
+            return Response({"success": False, "message": message, "code": "NOT_SENT", "errors": [message]}, status=status.HTTP_400_BAD_REQUEST)
+        log_action(action="fees.reminder_sent", actor=request.user, school=get_current_school(), entity_type="Invoice", entity_id=str(invoice.pk))
+        return _ok("Reminder sent.", **result)
+
     @action(detail=False, methods=["get"])
     def outstanding(self, request):
         qs = self.filter_queryset(self.get_queryset()).filter(
@@ -258,12 +308,15 @@ class InvoiceLineItemViewSet(FeesModelViewSet):
         return InvoiceLineItem.objects.select_related("invoice", "fee_category").all()
 
     def perform_update(self, serializer):
+        before = serializer.instance.amount
         serializer.save()
-        serializer.instance.invoice.recalculate_amounts()
+        item = serializer.instance
+        services.recalculate_and_notify(item.invoice, change=f"{item.description or item.get_line_type_display()} changed from {before} to {item.amount}")
 
     def perform_create(self, serializer):
         serializer.save(school=get_current_school())
-        serializer.instance.invoice.recalculate_amounts()
+        item = serializer.instance
+        services.recalculate_and_notify(item.invoice, change=f"{item.description or item.get_line_type_display()} of {item.amount} added")
 
     def perform_destroy(self, instance):
         # ValidationError, not FinanceError — this runs inside DRF's normal
@@ -275,8 +328,10 @@ class InvoiceLineItemViewSet(FeesModelViewSet):
             raise ValidationError(
                 "Cannot remove a line item once a payment has been recorded against this invoice."
             )
+        description = instance.description or instance.get_line_type_display()
+        amount = instance.amount
         instance.delete()
-        invoice.recalculate_amounts()
+        services.recalculate_and_notify(invoice, change=f"{description} ({amount}) removed")
 
 
 _PAYMENT_ACTION_PERMISSION = {
@@ -364,3 +419,39 @@ class PaymentViewSet(TenantScopedModelViewSet):
             after={"refund_amount": str(refund.amount), "reason": refund.reason},
         )
         return _ok("Refund recorded.", refund=RefundSerializer(refund).data)
+
+
+
+class MyFeesView(TenantScopedAPIView):
+    """GET /finance/my-fees/ - the signed-in student's own fees: what is required, what has been paid, what is outstanding, by
+    academic year and term, with each invoice's breakdown and its receipts. Only ever the caller's own record."""
+
+    def get(self, request):
+        student = getattr(request.user, "student_profile", None)
+        if student is None:
+            return _ok(is_student=False, summary=None, years=[])
+        return _ok(is_student=True, **services.student_fee_statement(student))
+
+
+class MyReceiptView(TenantScopedAPIView):
+    """GET /finance/my-fees/receipts/<payment id>/ - one receipt, only if the payment belongs to the caller's own invoice."""
+
+    def get(self, request, pk):
+        student = getattr(request.user, "student_profile", None)
+        payment = (
+            Payment.objects.select_related("invoice__academic_year", "invoice__term", "invoice__student", "school").filter(pk=pk, invoice__student=student).first()
+            if student is not None
+            else None
+        )
+        if payment is None:
+            return Response({"success": False, "message": "Receipt not found.", "code": "NOT_FOUND", "errors": []}, status=status.HTTP_404_NOT_FOUND)
+        invoice = payment.invoice
+        return _ok(
+            receipt={
+                "receipt_number": payment.receipt_number, "amount": payment.amount, "method": payment.method, "reference": payment.reference,
+                "paid_at": payment.paid_at, "status": payment.status, "invoice_number": invoice.invoice_number,
+                "academic_year": invoice.academic_year.name, "term": invoice.term.name if invoice.term_id else "",
+                "invoice_total": invoice.total, "invoice_paid": invoice.amount_paid, "invoice_balance": invoice.balance,
+                "student_name": invoice.student.full_name, "admission_number": invoice.student.admission_number, "school_name": payment.school.name,
+            }
+        )

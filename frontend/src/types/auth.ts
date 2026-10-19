@@ -41,6 +41,8 @@ export interface CurrentUser {
   needs_role_choice: boolean;
   is_student: boolean;
   is_staff_member: boolean;
+  /** True when the account's staff profile is on a pay plan or has salary payments (shows "My salary"). */
+  has_salary?: boolean;
   two_factor_enabled: boolean;
   two_factor_required: boolean;
   must_change_password: boolean;

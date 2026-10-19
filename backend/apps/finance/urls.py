@@ -1,6 +1,10 @@
 from rest_framework.routers import DefaultRouter
 
+from django.urls import path
+
 from .views import (
+    MyFeesView,
+    MyReceiptView,
     FeeCategoryViewSet,
     FeeStructureItemViewSet,
     FeeStructureViewSet,
@@ -19,4 +23,7 @@ router.register("payments", PaymentViewSet, basename="payment")
 
 app_name = "finance"
 
-urlpatterns = router.urls
+urlpatterns = [
+    path("my-fees/", MyFeesView.as_view(), name="my-fees"),
+    path("my-fees/receipts/<uuid:pk>/", MyReceiptView.as_view(), name="my-fee-receipt"),
+] + router.urls

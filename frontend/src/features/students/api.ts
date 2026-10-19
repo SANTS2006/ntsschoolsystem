@@ -39,6 +39,16 @@ export async function updateStudent(id: string, values: StudentPayload): Promise
   return data;
 }
 
+export async function revokeStudentAccess(id: string, reason: string): Promise<Student> {
+  const { data } = await apiClient.post<{ student: Student }>(`/students/${id}/revoke-access/`, { reason });
+  return data.student;
+}
+
+export async function restoreStudentAccess(id: string): Promise<Student> {
+  const { data } = await apiClient.post<{ student: Student }>(`/students/${id}/restore-access/`);
+  return data.student;
+}
+
 export async function archiveStudent(id: string): Promise<void> {
   await apiClient.delete(`/students/${id}/`);
 }

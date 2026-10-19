@@ -16,13 +16,13 @@ class StudentSerializer(serializers.ModelSerializer):
         fields = [
             "id", "user", "admission_number", "first_name", "middle_name", "last_name", "full_name",
             "date_of_birth", "gender", "photo", "address", "previous_school",
-            "admission_date", "status",
+            "admission_date", "status", "access_revoked", "access_revoked_reason", "access_revoked_at",
             "current_academic_year", "current_academic_year_name",
             "current_class", "current_class_name",
             "current_section", "current_section_name",
             "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "access_revoked", "access_revoked_reason", "access_revoked_at", "created_at", "updated_at"]
 
     def _validate_same_school(self, value, label):
         request = self.context["request"]

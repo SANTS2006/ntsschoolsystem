@@ -1,4 +1,4 @@
-import { CheckCircle2, Megaphone, Plus, Search, Send, Trash2, Users } from "lucide-react";
+import { CheckCircle2, Megaphone, Pencil, Plus, Search, Send, Trash2, Users } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -44,6 +44,7 @@ export function AnnouncementsListPage() {
   const confirm = useConfirm();
   const canCreate = useHasPermission("communications.create");
   const canDelete = useHasPermission("communications.delete");
+  const canUpdate = useHasPermission("communications.update");
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -155,6 +156,7 @@ export function AnnouncementsListPage() {
             {data.results.map((announcement) => {
               const canPublish = canCreate && announcement.is_mine && !announcement.published_at;
               const canRemove = canDelete && announcement.is_mine;
+              const canEditThis = canUpdate && announcement.is_mine;
               const hasRecipients = announcement.target_type === "specific_users";
               return (
                 <ImageCard
@@ -179,15 +181,22 @@ export function AnnouncementsListPage() {
                     </Badge>
                   }
                   description={announcement.body}
-                  onClick={() => navigate(`/communications/${announcement.id}/edit`)}
+                  onClick={() => navigate(`/communications/${announcement.id}`)}
                   actions={
-                    hasRecipients || canPublish || canRemove ? (
+                    hasRecipients || canEditThis || canPublish || canRemove ? (
                       <>
                         {hasRecipients && (
                           <CardAction
                             label={`Manage recipients for ${announcement.title}`}
                             icon={Users}
                             onClick={() => navigate(`/communications/${announcement.id}/recipients`)}
+                          />
+                        )}
+                        {canEditThis && (
+                          <CardAction
+                            label={`Edit ${announcement.title}`}
+                            icon={Pencil}
+                            onClick={() => navigate(`/communications/${announcement.id}/edit`)}
                           />
                         )}
                         {canPublish && (

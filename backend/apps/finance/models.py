@@ -117,6 +117,10 @@ class Invoice(TenantScopedModel, TimeStampedModel):
     total = models.DecimalField(max_digits=10, decimal_places=2, default=ZERO)
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=ZERO)
     balance = models.DecimalField(max_digits=10, decimal_places=2, default=ZERO)
+    # When the accountant last sent a payment reminder for this invoice, and how many have gone out: so the same person is
+    # not reminded again and again by accident.
+    last_reminder_at = models.DateTimeField(null=True, blank=True)
+    reminder_count = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         db_table = "invoices"

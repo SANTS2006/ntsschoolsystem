@@ -31,6 +31,8 @@ _ACTION_SUFFIX = {
     "destroy": "delete",
     "publish": "update",
     "cancel": "update",
+    "close_registration": "update",
+    "reopen_registration": "update",
     "attendees": "view",
 }
 
@@ -39,10 +41,24 @@ def _ok(message="", **extra):
     return Response({"success": True, "message": message, "code": "OK", "errors": [], **extra})
 
 
+_CLOSED_MESSAGES = {
+    "ended": ("This event has ended, so registration is closed.", "EVENT_ENDED"),
+    "closed": ("Registration for this event has been closed.", "REGISTRATION_CLOSED"),
+    "deadline": ("The registration deadline for this event has passed.", "REGISTRATION_CLOSED"),
+}
+
+
+def _registration_closed_response(event):
+    reason = _CLOSED_MESSAGES.get(event.registration_state)
+    if reason is None:
+        return None
+    return Response({"success": False, "message": reason[0], "code": reason[1], "errors": []}, status=status.HTTP_400_BAD_REQUEST)
+
+
 class EventViewSet(CreatorOnlyActionsMixin, TenantScopedModelViewSet):
     # Anyone with the right permission can see an event and register for it, but only its creator
     # edits, publishes, cancels or deletes it.
-    creator_only_actions = {"update", "partial_update", "destroy", "publish", "cancel"}
+    creator_only_actions = {"update", "partial_update", "destroy", "publish", "cancel", "close_registration", "reopen_registration"}
     creator_only_message = "You can only edit, publish, cancel or delete events you created."
     serializer_class = EventSerializer
     filterset_fields = ["category", "status", "target_type"]
@@ -133,6 +149,9 @@ class EventViewSet(CreatorOnlyActionsMixin, TenantScopedModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        closed = _registration_closed_response(event)
+        if closed is not None:
+            return closed
         # Locks the event row for the transaction's duration so two concurrent registration
         # requests for the last remaining spot can't both pass the capacity check — the second
         # blocks until the first commits, then re-reads `registered_count` including that new
@@ -143,6 +162,9 @@ class EventViewSet(CreatorOnlyActionsMixin, TenantScopedModelViewSet):
         # needs no fresh tenant-filtering decision.
         with transaction.atomic():
             event = Event.unscoped_objects.select_for_update().get(pk=event.pk)
+            closed = _registration_closed_response(event)
+            if closed is not None:
+                return closed
             existing = EventRegistration.objects.filter(event=event, user=request.user).first()
             if existing is not None and existing.status == EventRegistration.Status.REGISTERED:
                 return Response(
@@ -173,6 +195,30 @@ class EventViewSet(CreatorOnlyActionsMixin, TenantScopedModelViewSet):
                     school=get_current_school(), event=event, user=request.user
                 )
         return _ok("Registered.", registration=EventRegistrationSerializer(registration).data)
+
+    @action(detail=True, methods=["post"], url_path="close-registration")
+    def close_registration(self, request, pk=None):
+        event = self.get_object()
+        event.registration_closed = True
+        event.save(update_fields=["registration_closed", "updated_at"])
+        log_action(action="events.registration_closed", actor=request.user, school=get_current_school(), entity_type="Event", entity_id=str(event.pk))
+        return _ok("Registration closed.", event=EventSerializer(event, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="reopen-registration")
+    def reopen_registration(self, request, pk=None):
+        event = self.get_object()
+        if event.end_datetime <= timezone.now():
+            return Response(
+                {"success": False, "message": "The event has ended, so registration cannot be reopened.", "code": "EVENT_ENDED", "errors": []},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        event.registration_closed = False
+        # A close time that has already passed would shut it again at once, so clear it on reopen.
+        if event.registration_closes_at and event.registration_closes_at <= timezone.now():
+            event.registration_closes_at = None
+        event.save(update_fields=["registration_closed", "registration_closes_at", "updated_at"])
+        log_action(action="events.registration_reopened", actor=request.user, school=get_current_school(), entity_type="Event", entity_id=str(event.pk))
+        return _ok("Registration reopened.", event=EventSerializer(event, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="cancel-registration")
     def cancel_registration(self, request, pk=None):

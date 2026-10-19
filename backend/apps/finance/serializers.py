@@ -145,11 +145,11 @@ class InvoiceSerializer(serializers.ModelSerializer):
         fields = [
             "id", "student", "student_name", "fee_structure", "invoice_number", "academic_year",
             "term", "due_date", "status", "subtotal", "discount_total", "total", "amount_paid",
-            "balance", "is_overdue", "created_at", "updated_at",
+            "balance", "is_overdue", "last_reminder_at", "reminder_count", "created_at", "updated_at",
         ]
         read_only_fields = [
             "id", "invoice_number", "status", "subtotal", "discount_total", "total",
-            "amount_paid", "balance", "created_at", "updated_at",
+            "amount_paid", "balance", "last_reminder_at", "reminder_count", "created_at", "updated_at",
         ]
 
     def _same_school(self, value, label):
@@ -249,3 +249,15 @@ class RecordRefundSerializer(serializers.Serializer):
         if value <= 0:
             raise serializers.ValidationError("Amount must be positive.")
         return value
+
+
+class SendRemindersSerializer(serializers.Serializer):
+    """Who to remind: explicit invoices, or a filter. `note` is an optional line added to the message."""
+
+    invoice_ids = serializers.ListField(child=serializers.UUIDField(), required=False, allow_empty=False, max_length=500)
+    academic_year = serializers.UUIDField(required=False)
+    term = serializers.UUIDField(required=False)
+    school_class = serializers.UUIDField(required=False)
+    only_overdue = serializers.BooleanField(required=False, default=False)
+    note = serializers.CharField(required=False, allow_blank=True, max_length=500, default="")
+    force = serializers.BooleanField(required=False, default=False)

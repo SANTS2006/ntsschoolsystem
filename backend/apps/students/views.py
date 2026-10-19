@@ -1,4 +1,5 @@
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -63,6 +64,8 @@ class StudentViewSet(TenantScopedModelViewSet):
             code = "students.view" if self.request.method.lower() == "get" else "students.update"
         elif self.action == "bulk_status":
             code = "students.update"
+        elif self.action in ("revoke_access", "restore_access"):
+            code = "students.revoke_access"
         else:
             code = f"students.{_ACTION_SUFFIX.get(self.action, 'view')}"
         return [require_permission(code)()]
@@ -107,6 +110,48 @@ class StudentViewSet(TenantScopedModelViewSet):
             entity_id=str(instance.pk),
             severity="warning",
         )
+
+    @action(detail=True, methods=["post"], url_path="revoke-access")
+    def revoke_access(self, request, pk=None):
+        """Blocks the student's login until restored. A reason is required and is shown to the student when they try to sign in."""
+        student = self.get_object()
+        reason = str(request.data.get("reason", "")).strip()
+        if len(reason) < 5:
+            return Response(
+                {"success": False, "message": "State why access is being revoked (at least a few words).", "code": "VALIDATION_ERROR", "errors": {"reason": ["Required."]}},
+                status=400,
+            )
+        if student.user_id is None:
+            return Response(
+                {"success": False, "message": "This student has no login account to revoke.", "code": "NO_ACCOUNT", "errors": []}, status=400
+            )
+        if student.access_revoked:
+            return Response({"success": False, "message": "Access is already revoked.", "code": "ALREADY_REVOKED", "errors": []}, status=400)
+        student.access_revoked = True
+        student.access_revoked_reason = reason[:500]
+        student.access_revoked_at = timezone.now()
+        student.access_revoked_by = request.user
+        student.save(update_fields=["access_revoked", "access_revoked_reason", "access_revoked_at", "access_revoked_by", "updated_at"])
+        log_action(
+            action="students.access_revoked", actor=request.user, school=get_current_school(), entity_type="Student",
+            entity_id=str(student.pk), severity="warning", metadata={"reason": reason[:500]},
+        )
+        return _ok("Login access revoked.", student=StudentSerializer(student, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="restore-access")
+    def restore_access(self, request, pk=None):
+        student = self.get_object()
+        if not student.access_revoked:
+            return Response({"success": False, "message": "Access is not revoked.", "code": "NOT_REVOKED", "errors": []}, status=400)
+        student.access_revoked = False
+        student.access_revoked_reason = ""
+        student.access_revoked_at = None
+        student.access_revoked_by = None
+        student.save(update_fields=["access_revoked", "access_revoked_reason", "access_revoked_at", "access_revoked_by", "updated_at"])
+        log_action(
+            action="students.access_restored", actor=request.user, school=get_current_school(), entity_type="Student", entity_id=str(student.pk),
+        )
+        return _ok("Login access restored.", student=StudentSerializer(student, context={"request": request}).data)
 
     @action(detail=False, methods=["post"], url_path="bulk-status")
     def bulk_status(self, request):

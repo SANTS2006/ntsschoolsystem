@@ -35,10 +35,15 @@ const schema = z
     end_datetime: z.string().min(1, "End date/time is required"),
     location: z.string(),
     capacity: z.string(),
+    registration_closes_at: z.string(),
   })
   .refine((values) => values.end_datetime >= values.start_datetime, {
     message: "Must be on or after the start date/time.",
     path: ["end_datetime"],
+  })
+  .refine((values) => !values.registration_closes_at || !values.end_datetime || values.registration_closes_at <= values.end_datetime, {
+    message: "Registration must close on or before the event ends.",
+    path: ["registration_closes_at"],
   });
 
 type FormValues = z.infer<typeof schema>;
@@ -51,9 +56,10 @@ const EMPTY_VALUES: FormValues = {
   end_datetime: "",
   location: "",
   capacity: "",
+  registration_closes_at: "",
 };
 const FIELD_KEYS = new Set([
-  "title", "description", "image", "category", "start_datetime", "end_datetime", "location", "capacity",
+  "title", "description", "image", "category", "start_datetime", "end_datetime", "location", "capacity", "registration_closes_at",
 ]);
 
 /** The backend stores UTC ISO datetimes; a `datetime-local` input works in naive local time with
@@ -104,6 +110,7 @@ export function EventFormPage() {
         end_datetime: toLocalInputValue(event.end_datetime),
         location: event.location,
         capacity: event.capacity === null ? "" : String(event.capacity),
+        registration_closes_at: event.registration_closes_at ? toLocalInputValue(event.registration_closes_at) : "",
       });
     }
   }, [event, reset]);
@@ -134,6 +141,8 @@ export function EventFormPage() {
         end_datetime: values.end_datetime,
         location: values.location || undefined,
         capacity: values.capacity ? Number(values.capacity) : undefined,
+        // Empty clears an earlier deadline when editing; omitted when creating.
+        registration_closes_at: values.registration_closes_at || (isEditMode ? "" : undefined),
         ...audienceToPayload(audience),
       },
       {
@@ -224,6 +233,13 @@ export function EventFormPage() {
               hint="Leave blank for unlimited attendance."
               error={errors.capacity?.message}
               {...register("capacity")}
+            />
+            <Input
+              type="datetime-local"
+              label="Registration closes"
+              hint="Optional. Registration always stops when the event ends; set an earlier time to close it automatically."
+              error={errors.registration_closes_at?.message}
+              {...register("registration_closes_at")}
             />
 
             <AudienceSection value={audience} onChange={setAudience} />

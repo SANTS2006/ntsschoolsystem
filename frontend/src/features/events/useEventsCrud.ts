@@ -5,6 +5,7 @@ import type { ApiError } from "@/lib/api-client";
 import {
   cancelEvent,
   cancelEventRegistration,
+  closeEventRegistration,
   createEvent,
   createEventMedia,
   createEventRecipient,
@@ -18,6 +19,7 @@ import {
   getEvent,
   publishEvent,
   registerForEvent,
+  reopenEventRegistration,
   updateEvent,
 } from "./api";
 import type {
@@ -87,6 +89,22 @@ export function useDeleteEvent() {
 function invalidateEvent(queryClient: ReturnType<typeof useQueryClient>, id: string) {
   queryClient.invalidateQueries({ queryKey: EVENTS_KEY });
   queryClient.invalidateQueries({ queryKey: [...EVENTS_KEY, "detail", id] });
+}
+
+export function useCloseEventRegistration() {
+  const queryClient = useQueryClient();
+  return useMutation<Event, ApiError, string>({
+    mutationFn: closeEventRegistration,
+    onSuccess: (_data, id) => invalidateEvent(queryClient, id),
+  });
+}
+
+export function useReopenEventRegistration() {
+  const queryClient = useQueryClient();
+  return useMutation<Event, ApiError, string>({
+    mutationFn: reopenEventRegistration,
+    onSuccess: (_data, id) => invalidateEvent(queryClient, id),
+  });
 }
 
 export function usePublishEvent() {
