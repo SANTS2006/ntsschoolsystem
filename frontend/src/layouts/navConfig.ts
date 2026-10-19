@@ -45,7 +45,7 @@ export interface NavChild {
   to: string;
   label: string;
   permission?: string | string[];
-  selfServiceFor?: "student" | "staff" | "student-or-staff" | "salaried";
+  selfServiceFor?: "student" | "staff" | "student-or-staff" | "salaried" | "non-student";
   hideForRoles?: string[];
   showForRoles?: string[];
 }
@@ -55,7 +55,7 @@ export interface NavItem {
   label: string;
   icon: typeof LayoutDashboard;
   permission?: string | string[];
-  selfServiceFor?: "student" | "staff" | "student-or-staff" | "salaried";
+  selfServiceFor?: "student" | "staff" | "student-or-staff" | "salaried" | "non-student";
   /** See `isNavItemVisible` in useAuth.ts. */
   hideForRoles?: string[];
   showForRoles?: string[];
@@ -82,7 +82,8 @@ export const NAV_CONFIG: NavItem[] = [
   { to: "/my-graduation-status", label: "Graduation Status", icon: GraduationCap, selfServiceFor: "student" },
   { to: "/my-attendance", label: "My Attendance", icon: CalendarCheck, selfServiceFor: "student" },
   { to: "/my-fees", label: "Fees", icon: Wallet, selfServiceFor: "student" },
-  { to: "/my-salary", label: "My salary", icon: Banknote, selfServiceFor: "salaried" },
+  // Every staff role (principal, administrator, accountant, exams director, teacher, driver, warden ...) sees it; a student never does.
+  { to: "/my-salary", label: "My salary", icon: Banknote, selfServiceFor: "non-student" },
   {
     to: "/my-staff-attendance",
     label: "My Attendance",

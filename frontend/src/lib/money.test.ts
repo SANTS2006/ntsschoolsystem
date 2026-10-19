@@ -22,4 +22,8 @@ describe("salaried nav gating", () => {
     expect(isNavItemVisible({ ...base, has_salary: true }, { selfServiceFor: "salaried" })).toBe(true);
     expect(isNavItemVisible({ ...base, has_salary: false }, { selfServiceFor: "salaried" })).toBe(false);
   });
+  it("shows My salary to every role except students", () => {
+    expect(isNavItemVisible({ ...base, is_student: false }, { selfServiceFor: "non-student" })).toBe(true);
+    expect(isNavItemVisible({ ...base, is_student: true }, { selfServiceFor: "non-student" })).toBe(false);
+  });
 });
