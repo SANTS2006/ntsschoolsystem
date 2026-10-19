@@ -401,6 +401,9 @@ ADMIN_URL = env("DJANGO_ADMIN_URL", "")
 # ---------------------------------------------------------------------------
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
+# Django's default ("same-origin") cuts the link between a page and any popup it opens, which leaves the "Sign in with Google"
+# popup blank. "same-origin-allow-popups" keeps the protection for everything else but lets the popup talk back.
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin-allow-popups"
 X_FRAME_OPTIONS = "DENY"
 
 # ---------------------------------------------------------------------------

@@ -48,6 +48,8 @@ def apply_document_headers(headers) -> None:
     headers["Content-Security-Policy"] = SPA_CONTENT_SECURITY_POLICY
     headers["Permissions-Policy"] = SPA_PERMISSIONS_POLICY
     headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    # Not "same-origin": that would blank the Google sign-in popup (see SECURE_CROSS_ORIGIN_OPENER_POLICY).
+    headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
     # The shell must be revalidated on every load so a new deploy is picked up immediately.
     headers["Cache-Control"] = "no-cache"
 

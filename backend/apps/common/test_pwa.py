@@ -19,3 +19,11 @@ def test_csp_allows_the_manifest_and_worker_but_still_no_inline_script():
     assert "manifest-src 'self'" in SPA_CONTENT_SECURITY_POLICY
     assert "worker-src 'self'" in SPA_CONTENT_SECURITY_POLICY
     assert "script-src 'self' https://accounts.google.com/gsi/client;" in SPA_CONTENT_SECURITY_POLICY
+
+
+def test_the_shell_lets_the_google_sign_in_popup_talk_back():
+    headers = {}
+    from apps.common.spa import apply_document_headers
+
+    apply_document_headers(headers)
+    assert headers["Cross-Origin-Opener-Policy"] == "same-origin-allow-popups"
