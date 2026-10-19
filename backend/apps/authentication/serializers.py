@@ -163,6 +163,11 @@ class LoginSerializer(serializers.Serializer):
     school_slug = serializers.CharField(required=False, allow_blank=True, max_length=255, write_only=True)
 
 
+class GoogleLoginSerializer(serializers.Serializer):
+    credential = serializers.CharField(write_only=True)
+    school_slug = serializers.CharField(required=False, allow_blank=True, max_length=255, write_only=True)
+
+
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 

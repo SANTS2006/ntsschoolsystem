@@ -198,6 +198,8 @@ DATA_UPLOAD_MAX_NUMBER_FILES = 20
 # raw files) or "local" (a folder). R2 is the default whenever it is fully configured, then Cloudinary; a local folder is only durable on a server with a
 # persistent disk.
 # Cloudflare R2 (recommended): an S3-compatible private bucket in an account separate from your uploads.
+# "Sign in with Google": the OAuth client id from Google Cloud Console (leave blank to switch the button off).
+GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID", "")
 BACKUP_R2_ACCOUNT_ID = env("BACKUP_R2_ACCOUNT_ID", "")
 BACKUP_R2_BUCKET = env("BACKUP_R2_BUCKET", "")
 BACKUP_R2_ACCESS_KEY_ID = env("BACKUP_R2_ACCESS_KEY_ID", "")

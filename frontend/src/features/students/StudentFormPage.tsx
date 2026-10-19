@@ -14,6 +14,7 @@ import { FullPageSpinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/toastContext";
 import { useAcademicYears, useSchoolClasses, useSections } from "@/features/academics/useAcademicsLookups";
 import type { ApiError } from "@/lib/api-client";
+import { applyFieldErrors } from "@/lib/formErrors";
 import { useStateFromSource } from "@/hooks/useStateFromSource";
 
 import type { StudentPayload } from "./types";
@@ -21,6 +22,7 @@ import { useCreateStudent, useStudent, useUpdateStudent } from "./useStudents";
 
 const studentSchema = z.object({
   admission_number: z.string().min(1, "Admission number is required"),
+  email: z.string().trim().refine((v) => v === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), "Enter a valid email address"),
   first_name: z.string().min(1, "First name is required"),
   middle_name: z.string(),
   last_name: z.string().min(1, "Last name is required"),
@@ -39,6 +41,7 @@ type StudentFormValues = z.infer<typeof studentSchema>;
 
 const EMPTY_VALUES: StudentFormValues = {
   admission_number: "",
+  email: "",
   first_name: "",
   middle_name: "",
   last_name: "",
@@ -79,6 +82,7 @@ function toPayload(values: StudentFormValues, photo: File | null): StudentPayloa
   // assertion at the boundary rather than fighting the type system inside the loop.
   const payload: Record<string, string | File> = {
     admission_number: values.admission_number,
+    email: values.email.trim(),
     first_name: values.first_name,
     last_name: values.last_name,
     status: values.status,
@@ -114,6 +118,7 @@ export function StudentFormPage() {
     handleSubmit,
     control,
     reset,
+    setError,
     formState: { errors },
   } = useForm<StudentFormValues>({ resolver: zodResolver(studentSchema), defaultValues: EMPTY_VALUES });
 
@@ -129,6 +134,7 @@ export function StudentFormPage() {
     if (student) {
       reset({
         admission_number: student.admission_number,
+        email: student.email ?? "",
         first_name: student.first_name,
         middle_name: student.middle_name ?? "",
         last_name: student.last_name,
@@ -170,12 +176,18 @@ export function StudentFormPage() {
   };
 
   const onSubmit = (values: StudentFormValues) => {
+    // The email becomes the student's sign-in address, so a new student needs one.
+    if (!isEditMode && !values.email) {
+      setError("email", { message: "Enter the student's email address" });
+      return;
+    }
     mutation.mutate(toPayload(values, photoFile), {
       onSuccess: (savedStudent) => {
         showToast({ title: isEditMode ? "Student updated" : "Student created" });
         navigate(`/students/${savedStudent.id}`);
       },
       onError: (err: ApiError) => {
+        if (applyFieldErrors(err, setError, new Set(["email"]))) return;
         showToast({ title: "Could not save student", description: err.message, tone: "danger" });
       },
     });
@@ -245,6 +257,13 @@ export function StudentFormPage() {
                 <option value="withdrawn">Withdrawn</option>
                 <option value="archived">Archived</option>
               </Select>
+              <Input
+                type="email"
+                label="Email"
+                hint="The student signs in with this address. Their account is created with it."
+                error={errors.email?.message}
+                {...register("email")}
+              />
               <Input label="First name" error={errors.first_name?.message} {...register("first_name")} />
               <Input label="Middle name" error={errors.middle_name?.message} {...register("middle_name")} />
               <Input label="Last name" error={errors.last_name?.message} {...register("last_name")} />

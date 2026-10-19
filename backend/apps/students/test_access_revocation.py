@@ -21,7 +21,7 @@ def _world():
     assign_role(user=admin, role=Role.unscoped_objects.get(school=school, slug="school-administrator"))
     teacher = UserFactory(school=school)
     assign_role(user=teacher, role=Role.unscoped_objects.get(school=school, slug="teacher"))
-    student = StudentFactory(school=school)
+    student = StudentFactory(school=school, email="stu.dent@example.com")
     account = provision_student_account(student)
     account.set_password(DEFAULT_TEST_PASSWORD)
     account.must_change_password = False

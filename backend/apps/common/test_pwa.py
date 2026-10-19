@@ -18,4 +18,4 @@ def test_hashed_assets_stay_immutable():
 def test_csp_allows_the_manifest_and_worker_but_still_no_inline_script():
     assert "manifest-src 'self'" in SPA_CONTENT_SECURITY_POLICY
     assert "worker-src 'self'" in SPA_CONTENT_SECURITY_POLICY
-    assert "script-src 'self';" in SPA_CONTENT_SECURITY_POLICY
+    assert "script-src 'self' https://accounts.google.com/gsi/client;" in SPA_CONTENT_SECURITY_POLICY

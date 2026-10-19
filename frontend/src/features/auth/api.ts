@@ -41,6 +41,31 @@ export async function login(email: string, password: string, schoolSlug?: string
   return { kind: "signed-in", user: data.user as CurrentUser };
 }
 
+export interface GoogleConfig {
+  enabled: boolean;
+  client_id: string;
+}
+
+export async function fetchGoogleConfig(): Promise<GoogleConfig> {
+  const { data } = await apiClient.get<GoogleConfig>("/auth/google/config/");
+  return { enabled: !!data.enabled, client_id: data.client_id ?? "" };
+}
+
+/** Signs in with the credential Google's button returned. Same result shape as a password sign-in. */
+export async function loginWithGoogle(credential: string, schoolSlug?: string | null): Promise<LoginResult> {
+  const { data } = await apiClient.post<LoginEnvelope>("/auth/google/", {
+    credential,
+    ...(schoolSlug ? { school_slug: schoolSlug } : {}),
+  });
+  if (data.code === "TWO_FACTOR_REQUIRED" && data.two_factor_token) {
+    return { kind: "two-factor", mode: "verify", token: data.two_factor_token };
+  }
+  if (data.code === "TWO_FACTOR_SETUP_REQUIRED" && data.two_factor_token) {
+    return { kind: "two-factor", mode: "setup", token: data.two_factor_token };
+  }
+  return { kind: "signed-in", user: data.user as CurrentUser };
+}
+
 export async function verifyTwoFactor(token: string, code: string): Promise<CurrentUser> {
   const { data } = await apiClient.post<UserEnvelope>("/auth/2fa/verify/", { two_factor_token: token, code });
   return data.user;

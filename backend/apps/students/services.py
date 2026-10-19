@@ -6,39 +6,37 @@ from apps.authorization.models import Role
 from apps.authorization.services import assign_role
 
 
-def student_default_email(student) -> str:
-    """Initials of the first, middle (if any) and last names, followed by the student's own
-    admission number (already unique per school — see Student's `unique_admission_number_per_school`
-    constraint, so no collision handling is needed here the way a name-only address would),
-    followed by "@" and the school's short domain: "Fatmata Sia Kamara", admission #009, at
-    Government Secondary School Kenema -> "fsk009@gssk.edu.sl"."""
-    school = student.school
-    initials = "".join(name[0] for name in (student.first_name, student.middle_name, student.last_name) if name)
-    local = re.sub(r"[^a-z0-9]", "", initials.lower()) or "student"
-    admission = re.sub(r"[^a-z0-9]", "", student.admission_number.lower())
-    school_code = "".join(word[0] for word in re.findall(r"[A-Za-z0-9]+", school.name)).lower()
-    return f"{local}{admission}@{school_code}.edu.sl"
+class StudentAccountError(Exception):
+    """The student's sign-in account could not be created (for example the e-mail is already in use)."""
 
 
 def provision_student_account(student):
-    """Gives a student without a login one: default email (see student_default_email), the
-    school's default password (e.g. "GSSK@2026"), the "student" role (see
-    apps.authorization.catalog), and `must_change_password` so they choose their own at first
-    sign-in. No email is sent — the address is a school-issued one, not a real inbox. Returns the
-    new user, or None if the student already has one."""
+    """Gives a student a login: the account is created with the student's own e-mail address, the school's default password
+    (e.g. "GSSK@2026"), the "student" role (see apps.authorization.catalog), and `must_change_password` so they choose their
+    own at first sign-in. Returns the new user, or None if the student already has an account or has no e-mail address yet.
+    Raises StudentAccountError when that address already belongs to another account."""
+    from django.db import IntegrityError, transaction
+
     from apps.tenants.services import generate_default_password
     from apps.users.models import User
 
-    if student.user_id:
+    email = (student.email or "").strip().lower()
+    if student.user_id or not email:
         return None
-    user = User.objects.create(
-        email=student_default_email(student),
-        first_name=student.first_name,
-        last_name=student.last_name,
-        school=student.school,
-        user_type=User.UserType.SCHOOL_USER,
-        is_active=True,
-    )
+    if User.objects.filter(email__iexact=email).exists():
+        raise StudentAccountError(f'An account with the email "{email}" already exists.')
+    try:
+        with transaction.atomic():
+            user = User.objects.create(
+                email=email,
+                first_name=student.first_name,
+                last_name=student.last_name,
+                school=student.school,
+                user_type=User.UserType.SCHOOL_USER,
+                is_active=True,
+            )
+    except IntegrityError as exc:
+        raise StudentAccountError(f'An account with the email "{email}" already exists.') from exc
     user.set_password(generate_default_password(student.school))
     user.must_change_password = True
     user.save(update_fields=["password", "must_change_password"])
@@ -49,6 +47,30 @@ def provision_student_account(student):
     if student_role is not None:
         assign_role(user=user, role=student_role)
     return user
+
+
+def send_student_account_email(student, user, *, request=None) -> bool:
+    """Tells a student their account is ready: their sign-in e-mail and the school's temporary password."""
+    from html import escape
+
+    from apps.common.email import email_button, school_link, send_email
+    from apps.tenants.services import generate_default_password
+
+    school = student.school
+    password = generate_default_password(school)
+    body = f"""
+        <p>Hi {escape(student.first_name)},</p>
+        <p>An account has been created for you at <strong>{escape(school.name)}</strong>. Use the details below to sign in.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin:14px 0;background:#f1f5f9;border-radius:10px;padding:14px 18px;width:100%;">
+          <tr><td style="padding:3px 0;color:#64748b;">Email</td>
+              <td style="padding:3px 0;text-align:right;font-weight:600;color:#0f172a;">{escape(user.email)}</td></tr>
+          <tr><td style="padding:3px 0;color:#64748b;">Temporary password</td>
+              <td style="padding:3px 0;text-align:right;font-weight:600;color:#0f172a;">{escape(password)}</td></tr>
+        </table>
+        <p>You'll be asked to choose your own password the first time you sign in.</p>
+        {email_button(school_link(school, "/login", request), "Sign in", school)}
+    """
+    return send_email(to_email=user.email, to_name=student.full_name, subject=f"Your {school.name} account", html_content=body, school=school)
 
 
 def scope_students_for_teacher(queryset: QuerySet, user) -> QuerySet:

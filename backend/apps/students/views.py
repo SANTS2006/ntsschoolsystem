@@ -12,7 +12,7 @@ from apps.tenants.services import get_current_school
 
 from .models import Student
 from .serializers import StudentSerializer
-from .services import provision_student_account, scope_students_for_teacher
+from .services import StudentAccountError, provision_student_account, scope_students_for_teacher, send_student_account_email
 
 _ACTION_SUFFIX = {
     "list": "view",
@@ -72,7 +72,12 @@ class StudentViewSet(TenantScopedModelViewSet):
 
     def perform_create(self, serializer):
         student = serializer.save(school_id=get_current_school_id())
-        provision_student_account(student)
+        try:
+            user = provision_student_account(student)
+        except StudentAccountError as exc:
+            raise ValidationError({"email": str(exc)}) from exc
+        if user is not None:
+            send_student_account_email(student, user, request=self.request)
 
     @action(detail=True, methods=["get"])
     def enrollments(self, request, pk=None):

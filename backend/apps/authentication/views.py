@@ -1,3 +1,5 @@
+import secrets
+
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.middleware.csrf import get_token
@@ -12,7 +14,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.audit.services import log_action
 from apps.common.views import TenantScopedAPIView
 
-from . import lockout, services, two_factor
+from . import google, lockout, services, two_factor
 from .access import student_access_revoked
 from .cookies import clear_auth_cookies, issue_tokens_for_user, set_auth_cookies
 from .serializers import (
@@ -20,6 +22,7 @@ from .serializers import (
     ChangePasswordSerializer,
     CurrentUserSerializer,
     EmailVerificationConfirmSerializer,
+    GoogleLoginSerializer,
     LoginSerializer,
     MeUpdateSerializer,
     PasswordResetConfirmSerializer,
@@ -172,6 +175,11 @@ class LoginView(APIView):
             )
             return _invalid_credentials()
 
+        return self._finish_sign_in(request, user)
+
+    def _finish_sign_in(self, request, user):
+        """Everything after the account is identified (by password or by Google): suspended student, inactive school, second factor,
+        then the session."""
         if student_access_revoked(user):
             log_action(action="auth.login_blocked_access_revoked", actor=user, school=user.school, entity_type="User", entity_id=str(user.pk), severity="warning")
             return Response(
@@ -208,6 +216,61 @@ class LoginView(APIView):
 
         lockout.register_success(user)
         return _complete_login(request, user)
+
+
+class GoogleConfigView(APIView):
+    """Tells the sign-in pages whether to show the Google button (and which client to use)."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({"success": True, "message": "", "code": "OK", "errors": [], "enabled": google.is_enabled(), "client_id": settings.GOOGLE_CLIENT_ID})
+
+
+class GoogleLoginView(LoginView):
+    """Sign in with a Google account. Google only proves who owns an e-mail address, so this never creates an account: the
+    address must already belong to a user of the system. Everything after that (wrong school page, suspended student, inactive
+    school, two-factor) is exactly the password sign-in."""
+
+    def post(self, request):
+        serializer = GoogleLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ip = _client_ip(request)
+        claims = google.verify_credential(serializer.validated_data["credential"])
+        if claims is None:
+            log_action(action="auth.google_login_failed", entity_type="User", entity_id="", metadata={"ip": ip}, severity="warning")
+            return Response(
+                {"success": False, "message": "We couldn't verify your Google sign-in. Please try again.", "code": "GOOGLE_INVALID", "errors": []},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        email = claims["email"].lower()
+        user = User.objects.filter(email__iexact=email, is_active=True).select_related("school").first()
+        if user is None:
+            log_action(action="auth.google_login_no_account", entity_type="User", entity_id="", metadata={"email": email, "ip": ip}, severity="warning")
+            return Response(
+                {
+                    "success": False,
+                    "message": f"No account uses {email}. Ask your school to add this email to your account, or sign in with your password.",
+                    "code": "GOOGLE_NO_ACCOUNT",
+                    "errors": [],
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if lockout.is_locked(user):
+            return _invalid_credentials()
+        if settings.LOGIN_SCOPE_ENFORCEMENT:
+            wrong = _wrong_sign_in_page(user, serializer.validated_data.get("school_slug", ""))
+            if wrong is not None:
+                return Response({"success": False, "message": wrong[0], "code": wrong[1], "errors": []}, status=status.HTTP_403_FORBIDDEN)
+        # Signing in with Google proves the person owns the address, so the shared default password is retired: it could
+        # otherwise still be used (by anyone who knows the school's name) to sign in to this account.
+        if user.must_change_password:
+            user.set_password(secrets.token_urlsafe(32))
+            user.must_change_password = False
+            user.save(update_fields=["password", "must_change_password"])
+        log_action(action="auth.google_login", actor=user, school=user.school, entity_type="User", entity_id=str(user.pk), metadata={"ip": ip})
+        return self._finish_sign_in(request, user)
 
 
 class LogoutView(TenantScopedAPIView):

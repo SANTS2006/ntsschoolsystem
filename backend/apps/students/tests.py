@@ -32,7 +32,7 @@ class TestStudentCreate:
 
         response = api_client.post(
             "/api/v1/students/",
-            {"admission_number": "ADM-0001", "first_name": "Ada", "last_name": "Lovelace"},
+            {"admission_number": "ADM-0001", "first_name": "Ada", "last_name": "Lovelace", "email": "ada@example.com"},
             format="json",
         )
         assert response.status_code == 201
@@ -178,27 +178,41 @@ class TestStudentGuardianLinking:
 
 
 class TestStudentDefaultAccount:
-    def test_new_student_gets_initials_admission_number_email_and_school_default_password(self, api_client):
+    def test_new_student_account_uses_the_entered_email_and_the_school_default_password(self, api_client):
         from apps.authorization.models import Role, UserRole
         from apps.tenants.services import generate_default_password
 
         school, school_admin = _school_admin()
-        school.name = "Government Secondary School Kenema"
-        school.save(update_fields=["name"])
         _login(api_client, school_admin)
 
-        payload = {"admission_number": "A1", "first_name": "Fatmata", "middle_name": "Sia", "last_name": "Kamara"}
+        payload = {"admission_number": "A1", "first_name": "Fatmata", "last_name": "Kamara", "email": "Fatmata@Example.com"}
         response = api_client.post("/api/v1/students/", payload, format="json")
         assert response.status_code == 201, response.data
         student = Student.unscoped_objects.get(admission_number="A1")
-        assert student.user.email == "fska1@gssk.edu.sl"
+        assert student.email == "fatmata@example.com"
+        assert student.user.email == "fatmata@example.com"
         assert student.user.check_password(generate_default_password(school))
         assert UserRole.unscoped_objects.filter(
             user=student.user, role=Role.unscoped_objects.get(school=school, slug="student")
         ).exists()
 
-        # Same initials, different admission number: no collision, since the admission number
-        # (already unique per school) disambiguates instead of a name-based counter.
-        payload.update(admission_number="A2", first_name="Fatu", middle_name="Sam", last_name="Koroma")
-        api_client.post("/api/v1/students/", payload, format="json")
-        assert Student.unscoped_objects.get(admission_number="A2").user.email == "fska2@gssk.edu.sl"
+    def test_email_is_required_and_must_be_unused(self, api_client):
+        _, school_admin = _school_admin()
+        _login(api_client, school_admin)
+        base = {"admission_number": "B1", "first_name": "Ama", "last_name": "Kamara"}
+        assert api_client.post("/api/v1/students/", base, format="json").status_code == 400
+        ok = api_client.post("/api/v1/students/", {**base, "email": "ama@example.com"}, format="json")
+        assert ok.status_code == 201
+        dup = api_client.post("/api/v1/students/", {**base, "admission_number": "B2", "email": "AMA@example.com"}, format="json")
+        assert dup.status_code == 400 and "email" in str(dup.data).lower()
+        assert not Student.unscoped_objects.filter(admission_number="B2").exists()
+
+    def test_changing_a_students_email_changes_their_sign_in_address(self, api_client):
+        _, school_admin = _school_admin()
+        _login(api_client, school_admin)
+        created = api_client.post(
+            "/api/v1/students/", {"admission_number": "C1", "first_name": "Kai", "last_name": "Sesay", "email": "kai@example.com"}, format="json"
+        )
+        response = api_client.patch(f"/api/v1/students/{created.data['id']}/", {"email": "kai.new@example.com"}, format="json")
+        assert response.status_code == 200, response.data
+        assert Student.unscoped_objects.get(admission_number="C1").user.email == "kai.new@example.com"

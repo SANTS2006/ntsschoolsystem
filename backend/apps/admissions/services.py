@@ -145,7 +145,7 @@ def _clean_number(value, label):
 @transaction.atomic
 def accept_student_application(application, *, actor, request=None, admission_number=None):
     from apps.students.models import Student
-    from apps.students.services import provision_student_account
+    from apps.students.services import StudentAccountError, provision_student_account
 
     if application.applying_for_class_id is None:
         raise ApplicationAcceptError("No class was specified on this application.")
@@ -162,6 +162,7 @@ def accept_student_application(application, *, actor, request=None, admission_nu
         last_name=application.last_name,
         date_of_birth=application.date_of_birth,
         gender=application.gender,
+        email=application.email.strip().lower(),
         address=application.address,
         previous_school=application.previous_school,
         admission_date=timezone.now().date(),
@@ -170,10 +171,9 @@ def accept_student_application(application, *, actor, request=None, admission_nu
     )
     try:
         user = provision_student_account(student)
-    except IntegrityError as exc:
+    except (IntegrityError, StudentAccountError) as exc:
         raise ApplicationAcceptError(
-            "Could not create a sign-in account — a school-issued address for this student "
-            "already exists."
+            f'An account with the email "{application.email}" already exists.'
         ) from exc
 
     _link_guardian(application, student)

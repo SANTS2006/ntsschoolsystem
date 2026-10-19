@@ -35,6 +35,9 @@ class Student(TenantScopedModel, TimeStampedModel):
         "users.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
 
+    # The student's own e-mail address. It is the sign-in address of their account (the account is created with it), so it
+    # must be a real one; older students may not have one yet.
+    email = models.EmailField(blank=True)
     admission_number = models.CharField(max_length=50)
     first_name = models.CharField(max_length=150)
     middle_name = models.CharField(max_length=150, blank=True)

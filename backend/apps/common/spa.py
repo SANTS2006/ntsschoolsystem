@@ -19,16 +19,17 @@ from django.views.defaults import page_not_found
 # No inline script, no eval, no third-party script: an XSS bug would find almost nothing to run.
 # Cloudinary hosts uploaded files: images/video are shown directly (img/media-src), and the in-app file
 # viewer also fetches them to save as a download or preview text (connect-src) and shows PDFs in an
-# iframe (frame-src). Daily.co hosts the live-lesson room (iframe + signalling).
+# iframe (frame-src). Daily.co hosts the live-lesson room (iframe + signalling). Google's sign-in script, button
+# frame and stylesheet are allowed for "Sign in with Google" (and nothing else of Google's).
 SPA_CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
-    "script-src 'self'; "
-    "style-src 'self'; style-src-attr 'unsafe-inline'; "
-    "img-src 'self' data: blob: https://res.cloudinary.com; "
+    "script-src 'self' https://accounts.google.com/gsi/client; "
+    "style-src 'self' https://accounts.google.com/gsi/style; style-src-attr 'unsafe-inline'; "
+    "img-src 'self' data: blob: https://res.cloudinary.com https://*.googleusercontent.com; "
     "media-src 'self' blob: https://res.cloudinary.com; "
     "font-src 'self'; "
-    "connect-src 'self' https://res.cloudinary.com https://*.daily.co wss://*.daily.co; "
-    "frame-src blob: https://res.cloudinary.com https://*.daily.co; "
+    "connect-src 'self' https://res.cloudinary.com https://*.daily.co wss://*.daily.co https://accounts.google.com/gsi/; "
+    "frame-src blob: https://res.cloudinary.com https://*.daily.co https://accounts.google.com/gsi/; "
     "manifest-src 'self'; worker-src 'self'; "
     "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; "
     "upgrade-insecure-requests"

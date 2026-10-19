@@ -12,6 +12,7 @@ import type { ApiError } from "@/lib/api-client";
 import { useSchoolSlug } from "@/lib/schoolSlug";
 
 import { authButtonClass, authInputClass } from "./components/authStyles";
+import { GoogleSignInButton } from "./GoogleSignInButton";
 import { useLogin } from "./useAuth";
 
 const loginSchema = z.object({
@@ -98,6 +99,7 @@ export function LoginForm() {
           Sign In
         </Button>
       </form>
+      <GoogleSignInButton />
     </>
   );
 }

@@ -46,3 +46,15 @@
 - New migrations: `common 0001`, `salary 0002`, `finance 0002`, `events 0005`, `students 0004`. Take a backup before deploying.
 - New dependency: `openpyxl` (Excel export).
 - Run `python manage.py seed_permissions` so `students.revoke_access` exists; the principal and school administrator roles pick it up automatically.
+
+## Student e-mail and accounts
+- The add-student form has a required **Email**. The student's account is created with that address (and the school's default password, which stays), and they are e-mailed their sign-in details. The old generated school address (`fsk009@gssk.edu.sl`) is gone.
+- When an application is accepted, the account is created with the email entered on the application form.
+- Changing a student's email also changes their sign-in address. Existing students keep their current sign-in address (copied onto the student record by migration `students 0005`).
+- Students with no email have no account until one is entered; `manage.py provision_student_accounts` creates accounts for any that have an email but none yet.
+
+## Sign in with Google
+- A "Continue with Google" button on every sign-in page (platform and school). It signs in an **existing** account whose email matches the Google account; it never creates accounts.
+- Wrong-school-page, suspended-student, inactive-school and two-factor rules are the same as the password sign-in.
+- Signing in with Google retires the account's default password (replaced by a random one) so the shared default can't be used to sign in; the person can still set a password through "Forgot password".
+- Setup: create an OAuth Web client in Google Cloud Console, add the site's origin (for example `https://your-site.example`) under Authorised JavaScript origins, and set `GOOGLE_CLIENT_ID` on the server. Without it the button is simply hidden. New dependency: `google-auth`.

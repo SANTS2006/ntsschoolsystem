@@ -274,8 +274,9 @@ class TestBulkAccept:
         assert student.user_id is not None
         assert application.created_student_id == student.id
         assert student.admission_number == "ADM-100"
-        # the sign-in email follows the school's usual student format, built from that admission number
-        assert student.user.email == "ak" + "adm100" + "@" + "".join(w[0] for w in school.name.split()).lower() + ".edu.sl"
+        # the account is created with the email the applicant entered on the application form
+        assert student.email == application.email.lower()
+        assert student.user.email == application.email.lower()
 
     def test_accepts_a_staff_application(self, api_client):
         school, admin = _school_administrator()

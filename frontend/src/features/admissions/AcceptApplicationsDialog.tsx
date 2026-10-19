@@ -25,7 +25,7 @@ const COPY: Record<ApplicationKind, { heading: string; label: string; placeholde
 /** Asks for the number each accepted person will be known by before they're moved into the school's
  * records: an admission number for each student and a staff number for each staff member, entered
  * separately so the two can't be mixed up. The numbers are saved on the new student/staff record, and a
- * student's sign-in email is built from theirs, the same way as every other student's. */
+ * student's account is created with the email they entered on their application. */
 export function AcceptApplicationsDialog({
   open,
   onClose,

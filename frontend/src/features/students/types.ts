@@ -12,6 +12,7 @@ export type StudentGender = "male" | "female" | "other" | "";
 export interface Student {
   id: string;
   user: string | null;
+  email: string;
   admission_number: string;
   first_name: string;
   middle_name: string;
@@ -53,6 +54,7 @@ export interface StudentListParams {
  * rather than treating it as null. */
 export interface StudentPayload {
   admission_number: string;
+  email?: string;
   first_name: string;
   middle_name?: string;
   last_name: string;

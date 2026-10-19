@@ -14,8 +14,10 @@ import {
   enableTwoFactor,
   enrollTwoFactor,
   fetchCurrentUser,
+  fetchGoogleConfig,
   fetchTwoFactorStatus,
   login,
+  loginWithGoogle,
   logout,
   regenerateRecoveryCodes,
   sendHeartbeat,
@@ -68,6 +70,23 @@ export function useLogin() {
       // A two-factor challenge is NOT a session: nothing to cache until the second step succeeds.
       if (result.kind === "signed-in") {
         clearStoredActiveRole(); // a new sign-in always starts by choosing a role again
+        queryClient.setQueryData(CURRENT_USER_QUERY_KEY, result.user);
+      }
+    },
+  });
+}
+
+export function useGoogleConfig() {
+  return useQuery({ queryKey: ["auth", "google-config"], queryFn: fetchGoogleConfig, staleTime: 10 * 60 * 1000, retry: 1 });
+}
+
+export function useGoogleLogin() {
+  const queryClient = useQueryClient();
+  return useMutation<LoginResult, ApiError, { credential: string; schoolSlug?: string | null }>({
+    mutationFn: ({ credential, schoolSlug }) => loginWithGoogle(credential, schoolSlug),
+    onSuccess: (result) => {
+      if (result.kind === "signed-in") {
+        clearStoredActiveRole();
         queryClient.setQueryData(CURRENT_USER_QUERY_KEY, result.user);
       }
     },
