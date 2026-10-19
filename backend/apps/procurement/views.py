@@ -163,7 +163,9 @@ class PurchaseOrderViewSet(TenantScopedModelViewSet):
         return PurchaseOrder.objects.select_related("supplier", "source_request", "created_by").all()
 
     def perform_create(self, serializer):
-        serializer.save(school=get_current_school(), created_by=self.request.user)
+        order = serializer.save(school=get_current_school(), created_by=self.request.user)
+        # An order raised from an approved request starts with that request's items already on it.
+        services.copy_request_items_to_order(order)
 
     @action(detail=True, methods=["post"])
     def send(self, request, pk=None):
@@ -172,7 +174,14 @@ class PurchaseOrderViewSet(TenantScopedModelViewSet):
             services.send_order(order)
         except services.ProcurementError as exc:
             return _error(str(exc), "VALIDATION_ERROR", status.HTTP_400_BAD_REQUEST)
-        return _ok("Order sent.", order=PurchaseOrderSerializer(order).data)
+        emailed = services.email_order_to_supplier(order, sent_by=request.user)
+        if emailed:
+            note = f"Order sent and e-mailed to {order.supplier.name}."
+        elif not order.supplier.email:
+            note = f"Order sent. {order.supplier.name} has no e-mail address on file, so nothing was e-mailed."
+        else:
+            note = f"Order sent, but the e-mail to {order.supplier.name} could not be delivered."
+        return _ok(note, order=PurchaseOrderSerializer(order).data, supplier_emailed=emailed)
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):

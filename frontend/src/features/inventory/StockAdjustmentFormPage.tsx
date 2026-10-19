@@ -17,7 +17,7 @@ import { useItem, useStockIn, useStockOut } from "./useInventoryCrud";
 
 const schema = z.object({
   quantity: z.coerce.number().int().gt(0, "Quantity must be greater than zero"),
-  reason: z.string(),
+  reason: z.string().trim().min(3, "A reason is required"),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -44,7 +44,7 @@ export function StockAdjustmentFormPage() {
   const onSubmit = (values: FormValues) => {
     setGeneralError(null);
     mutation.mutate(
-      { quantity: values.quantity, reason: values.reason || undefined },
+      { quantity: values.quantity, reason: values.reason },
       {
         onSuccess: () => {
           showToast({ title: direction === "in" ? "Stock added" : "Stock removed" });
@@ -96,7 +96,7 @@ export function StockAdjustmentFormPage() {
             />
             <Input
               label="Reason"
-              hint="Optional — recorded on the stock movement ledger."
+              hint="Required — recorded on the stock movement ledger."
               error={errors.reason?.message}
               {...register("reason")}
             />

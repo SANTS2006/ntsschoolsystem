@@ -122,7 +122,8 @@ export interface PurchaseOrderItem {
 export interface PurchaseOrderItemPayload {
   order: string;
   inventory_item?: string;
-  description: string;
+  /** The item's name; omitted when an inventory item is chosen (its name is used). */
+  description?: string;
   quantity_ordered: number;
   unit_price: string;
 }

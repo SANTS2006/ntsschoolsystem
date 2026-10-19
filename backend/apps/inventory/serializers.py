@@ -75,4 +75,10 @@ class InventoryTransactionSerializer(serializers.ModelSerializer):
 
 class StockActionSerializer(serializers.Serializer):
     quantity = serializers.IntegerField(min_value=1)
-    reason = serializers.CharField(required=False, allow_blank=True, default="")
+    reason = serializers.CharField(max_length=500, error_messages={"blank": "A reason is required.", "required": "A reason is required."})
+
+    def validate_reason(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("A reason is required.")
+        return value

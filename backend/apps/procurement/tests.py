@@ -280,3 +280,66 @@ class TestProcurementTenantIsolation:
         ids_seen = {row["id"] for row in response.data["results"]}
         assert str(request_a.id) in ids_seen
         assert len(ids_seen) == 1
+
+
+class TestOrderFromRequestAndSupplierEmail:
+    def test_creating_an_order_from_an_approved_request_copies_its_items(self, api_client):
+        school, accountant = _accountant()
+        supplier = SupplierFactory(school=school)
+        request = PurchaseRequestFactory(school=school, status=PurchaseRequest.Status.APPROVED)
+        stock = InventoryItemFactory(school=school)
+        PurchaseRequestItemFactory(school=school, request=request, inventory_item=stock, description="Chalk", quantity=4, estimated_unit_price="2.50")
+        PurchaseRequestItemFactory(school=school, request=request, inventory_item=None, description="Projector", quantity=1, estimated_unit_price=None)
+        _login(api_client, accountant)
+
+        response = api_client.post(
+            "/api/v1/procurement/orders/",
+            {"order_number": "PO-100", "supplier": str(supplier.id), "source_request": str(request.id)},
+            format="json",
+        )
+        assert response.status_code == 201, response.data
+        order = PurchaseOrder.unscoped_objects.get(order_number="PO-100")
+        items = {i.description: i for i in order.items.model.unscoped_objects.filter(order=order)}
+        assert set(items) == {"Chalk", "Projector"}
+        assert items["Chalk"].quantity_ordered == 4 and str(items["Chalk"].unit_price) == "2.50"
+        assert items["Chalk"].inventory_item_id == stock.id and items["Projector"].inventory_item_id is None
+        order.refresh_from_db()
+        assert str(order.total_amount) == "10.00"
+
+    def test_order_item_needs_unit_price_and_a_name_or_inventory_item(self, api_client):
+        school, accountant = _accountant()
+        order = PurchaseOrderFactory(school=school)
+        stock = InventoryItemFactory(school=school, name="Markers")
+        _login(api_client, accountant)
+        url = "/api/v1/procurement/order-items/"
+
+        assert api_client.post(url, {"order": str(order.id), "description": "Chairs", "quantity_ordered": 2}, format="json").status_code == 400
+        assert api_client.post(url, {"order": str(order.id), "quantity_ordered": 2, "unit_price": "3.00"}, format="json").status_code == 400
+        ok = api_client.post(url, {"order": str(order.id), "inventory_item": str(stock.id), "quantity_ordered": 2, "unit_price": "3.00"}, format="json")
+        assert ok.status_code == 201, ok.data
+        assert ok.data["description"] == "Markers"
+
+    def test_sending_an_order_emails_the_supplier_the_full_order(self, api_client, monkeypatch):
+        sent = []
+        monkeypatch.setattr("apps.procurement.emails.send_email", lambda **kw: sent.append(kw) or True)
+        school, accountant = _accountant()
+        supplier = SupplierFactory(school=school, email="sales@acme.test")
+        order = PurchaseOrderFactory(school=school, supplier=supplier)
+        PurchaseOrderItemFactory(school=school, order=order, description="Chairs", quantity_ordered=10, unit_price="15.00")
+        order.recalculate_total()
+        _login(api_client, accountant)
+
+        response = api_client.post(f"/api/v1/procurement/orders/{order.id}/send/")
+        assert response.status_code == 200, response.data
+        assert response.data["supplier_emailed"] is True
+        assert len(sent) == 1 and sent[0]["to_email"] == "sales@acme.test"
+        assert "Chairs" in sent[0]["html_content"] and order.order_number in sent[0]["subject"]
+
+    def test_a_supplier_without_an_email_still_gets_the_order_sent(self, api_client):
+        school, accountant = _accountant()
+        supplier = SupplierFactory(school=school, email="")
+        order = PurchaseOrderFactory(school=school, supplier=supplier)
+        PurchaseOrderItemFactory(school=school, order=order)
+        _login(api_client, accountant)
+        response = api_client.post(f"/api/v1/procurement/orders/{order.id}/send/")
+        assert response.status_code == 200 and response.data["supplier_emailed"] is False

@@ -115,6 +115,9 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 class PurchaseOrderItemSerializer(serializers.ModelSerializer):
     inventory_item_name = serializers.CharField(source="inventory_item.name", read_only=True, default=None)
     is_fully_received = serializers.BooleanField(read_only=True)
+    # Either pick an inventory item (its name is used) or type the name of a new item.
+    description = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    unit_price = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0, required=True)
 
     class Meta:
         model = PurchaseOrderItem
@@ -123,6 +126,17 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
             "quantity_received", "unit_price", "is_fully_received",
         ]
         read_only_fields = ["id", "quantity_received"]
+
+    def validate(self, attrs):
+        item = attrs.get("inventory_item", getattr(self.instance, "inventory_item", None))
+        description = (attrs.get("description", getattr(self.instance, "description", "")) or "").strip()
+        if item is None and not description:
+            raise serializers.ValidationError({"description": "Enter the item name, or choose an inventory item."})
+        if item is not None and not description:
+            attrs["description"] = item.name
+        elif description:
+            attrs["description"] = description
+        return attrs
 
     def validate_order(self, value):
         _same_school(self.context, value, "Order")

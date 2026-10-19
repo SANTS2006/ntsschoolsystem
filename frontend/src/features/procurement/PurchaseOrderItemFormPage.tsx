@@ -23,15 +23,28 @@ import {
   useUpdatePurchaseOrderItem,
 } from "./useProcurementCrud";
 
-const schema = z.object({
-  inventory_item: z.string(),
-  description: z.string().min(1, "Description is required"),
-  quantity_ordered: z.coerce.number().int().gt(0, "Quantity must be greater than zero"),
-  unit_price: z.coerce.number().min(0, "Unit price cannot be negative"),
-});
+const schema = z
+  .object({
+    source: z.enum(["inventory", "new"]),
+    inventory_item: z.string(),
+    description: z.string(),
+    quantity_ordered: z.coerce.number().int().gt(0, "Quantity must be greater than zero"),
+    unit_price: z
+      .string()
+      .min(1, "Unit price is required")
+      .refine((v) => Number(v) >= 0, "Unit price cannot be negative"),
+  })
+  .superRefine((v, ctx) => {
+    if (v.source === "inventory" && !v.inventory_item) {
+      ctx.addIssue({ code: "custom", path: ["inventory_item"], message: "Choose an inventory item" });
+    }
+    if (v.source === "new" && !v.description.trim()) {
+      ctx.addIssue({ code: "custom", path: ["description"], message: "Enter the item name" });
+    }
+  });
 
 type FormValues = z.infer<typeof schema>;
-const EMPTY_VALUES: FormValues = { inventory_item: "", description: "", quantity_ordered: 1, unit_price: 0 };
+const EMPTY_VALUES: z.input<typeof schema> = { source: "new", inventory_item: "", description: "", quantity_ordered: 1, unit_price: "" };
 const FIELD_KEYS = new Set(["inventory_item", "description", "quantity_ordered", "unit_price"]);
 
 export function PurchaseOrderItemFormPage() {
@@ -52,17 +65,21 @@ export function PurchaseOrderItemFormPage() {
     register,
     handleSubmit,
     reset,
+    watch,
     setError,
     formState: { errors },
   } = useForm<z.input<typeof schema>, unknown, FormValues>({ resolver: zodResolver(schema), defaultValues: EMPTY_VALUES });
 
+  const source = watch("source");
+
   useEffect(() => {
     if (item) {
       reset({
+        source: item.inventory_item ? "inventory" : "new",
         inventory_item: item.inventory_item ?? "",
-        description: item.description,
+        description: item.inventory_item ? "" : item.description,
         quantity_ordered: item.quantity_ordered,
-        unit_price: Number(item.unit_price),
+        unit_price: String(item.unit_price),
       });
     }
   }, [item, inventoryItems, reset]);
@@ -72,10 +89,11 @@ export function PurchaseOrderItemFormPage() {
     mutation.mutate(
       {
         order: orderId as string,
-        inventory_item: values.inventory_item || undefined,
-        description: values.description,
+        // An inventory item supplies its own name; a new item has no inventory link.
+        inventory_item: values.source === "inventory" ? values.inventory_item : undefined,
+        description: values.source === "inventory" ? undefined : values.description.trim(),
         quantity_ordered: values.quantity_ordered,
-        unit_price: String(values.unit_price),
+        unit_price: values.unit_price,
       },
       {
         onSuccess: () => {
@@ -112,20 +130,27 @@ export function PurchaseOrderItemFormPage() {
             </Alert>
           )}
           <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
-            <Select
-              label="Inventory item"
-              hint="Optional — links this line so receiving it restocks the item automatically."
-              error={errors.inventory_item?.message}
-              {...register("inventory_item")}
-            >
-              <option value="">Not set (free text)</option>
-              {inventoryItems?.results.map((invItem) => (
-                <option key={invItem.id} value={invItem.id}>
-                  {invItem.name}
-                </option>
-              ))}
+            <Select label="What are you ordering?" {...register("source")}>
+              <option value="new">A new item (not in inventory)</option>
+              <option value="inventory">An item already in inventory</option>
             </Select>
-            <Input label="Description" error={errors.description?.message} {...register("description")} />
+            {source === "inventory" ? (
+              <Select
+                label="Inventory item"
+                hint="Receiving this line restocks the item automatically."
+                error={errors.inventory_item?.message}
+                {...register("inventory_item")}
+              >
+                <option value="">Select an inventory item</option>
+                {inventoryItems?.results.map((invItem) => (
+                  <option key={invItem.id} value={invItem.id}>
+                    {invItem.name}
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <Input label="Item name" error={errors.description?.message} {...register("description")} />
+            )}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Input
                 type="number"
@@ -136,6 +161,8 @@ export function PurchaseOrderItemFormPage() {
               <Input
                 type="number"
                 step="0.01"
+                min="0"
+                inputMode="decimal"
                 label="Unit price"
                 error={errors.unit_price?.message}
                 {...register("unit_price")}

@@ -51,7 +51,7 @@ export function PurchaseOrderDetailPage() {
   const handleSend = () => {
     if (!order) return;
     sendOrder.mutate(order.id, {
-      onSuccess: () => showToast({ title: "Order sent" }),
+      onSuccess: (result) => showToast({ title: result.message || "Order sent" }),
       onError: (err: ApiError) =>
         showToast({ title: "Could not send order", description: generalErrorMessage(err), tone: "danger" }),
     });

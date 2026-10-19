@@ -3,6 +3,7 @@ from django.utils import timezone
 
 from apps.inventory.services import record_stock_in
 
+from . import emails
 from .models import PurchaseOrder, PurchaseOrderItem, PurchaseRequest, PurchaseRequestItem
 
 
@@ -65,6 +66,34 @@ def send_order(order: PurchaseOrder) -> PurchaseOrder:
     order.ordered_at = timezone.now()
     order.save(update_fields=["status", "ordered_at", "updated_at"])
     return order
+
+
+def copy_request_items_to_order(order: PurchaseOrder) -> int:
+    """Fills a new order with the items of the approved request it came from (same quantities; the request's estimated
+    price becomes the unit price, or 0 when none was given so the accountant can set it)."""
+    if not order.source_request_id:
+        return 0
+    created = 0
+    for item in PurchaseRequestItem.unscoped_objects.filter(request_id=order.source_request_id):
+        PurchaseOrderItem.unscoped_objects.create(
+            school_id=order.school_id, order=order, inventory_item_id=item.inventory_item_id, description=item.description,
+            quantity_ordered=item.quantity, unit_price=item.estimated_unit_price or 0,
+        )
+        created += 1
+    if created:
+        order.recalculate_total()
+    return created
+
+
+def email_order_to_supplier(order: PurchaseOrder, *, sent_by=None) -> bool:
+    items = list(PurchaseOrderItem.unscoped_objects.filter(order=order).order_by("description"))
+    try:
+        return emails.send_order_to_supplier(order, items, sent_by=sent_by)
+    except Exception:  # noqa: BLE001 - a mail problem must never undo the order being sent
+        import logging
+
+        logging.getLogger("apps").exception("Order e-mail to supplier failed (%s)", order.order_number)
+        return False
 
 
 def cancel_order(order: PurchaseOrder) -> PurchaseOrder:

@@ -150,9 +150,11 @@ export async function deletePurchaseOrder(id: string): Promise<void> {
   await apiClient.delete(`/procurement/orders/${id}/`);
 }
 
-export async function sendPurchaseOrder(id: string): Promise<PurchaseOrder> {
-  const { data } = await apiClient.post<{ order: PurchaseOrder }>(`/procurement/orders/${id}/send/`);
-  return data.order;
+export async function sendPurchaseOrder(id: string): Promise<{ order: PurchaseOrder; message: string; supplier_emailed: boolean }> {
+  const { data } = await apiClient.post<{ order: PurchaseOrder; message: string; supplier_emailed: boolean }>(
+    `/procurement/orders/${id}/send/`,
+  );
+  return data;
 }
 
 export async function cancelPurchaseOrder(id: string): Promise<PurchaseOrder> {

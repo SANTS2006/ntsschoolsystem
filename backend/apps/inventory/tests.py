@@ -83,6 +83,17 @@ class TestInventoryItemCreation:
 
 
 class TestStockMovements:
+    def test_stock_in_and_out_need_a_reason(self, api_client):
+        school, principal = _principal()
+        item = InventoryItemFactory(school=school, quantity_in_stock=10)
+        _login(api_client, principal)
+        for action in ("stock_in", "stock_out"):
+            url = f"/api/v1/inventory/items/{item.id}/{action}/"
+            assert api_client.post(url, {"quantity": 1}, format="json").status_code == 400
+            assert api_client.post(url, {"quantity": 1, "reason": "   "}, format="json").status_code == 400
+        item.refresh_from_db()
+        assert item.quantity_in_stock == 10
+
     def test_stock_in_increases_quantity_and_creates_transaction(self, api_client):
         school, principal = _principal()
         item = InventoryItemFactory(school=school, quantity_in_stock=10)
@@ -124,7 +135,7 @@ class TestStockMovements:
         _login(api_client, principal)
 
         response = api_client.post(
-            f"/api/v1/inventory/items/{item.id}/stock_out/", {"quantity": 10}, format="json"
+            f"/api/v1/inventory/items/{item.id}/stock_out/", {"quantity": 10, "reason": "Issued to class"}, format="json"
         )
 
         assert response.status_code == 400
