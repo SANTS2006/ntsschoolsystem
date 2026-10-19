@@ -1,8 +1,9 @@
-import { Bell, BellRing, CheckCheck } from "lucide-react";
+import { Bell, BellRing, CheckCheck, Search } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -22,6 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 import { generalErrorMessage } from "@/lib/formErrors";
@@ -34,6 +36,8 @@ const PAGE_SIZE = 25;
 const PRIORITIES: NotificationPriority[] = ["low", "normal", "high"];
 
 export function NotificationsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const navigate = useNavigate();
   const { showToast } = useToast();
 
@@ -41,7 +45,7 @@ export function NotificationsListPage() {
   const [isRead, setIsRead] = useState<"" | "true" | "false">("");
   const [priority, setPriority] = useState<NotificationPriority | "">("");
 
-  const filterParams = { is_read: isRead === "" ? undefined : isRead === "true", priority: priority || undefined };
+  const filterParams = { search: debouncedSearch || undefined, is_read: isRead === "" ? undefined : isRead === "true", priority: priority || undefined };
   const { data, isLoading, isError, error, isFetching } = useNotificationList({
     page,
     page_size: PAGE_SIZE,
@@ -73,6 +77,9 @@ export function NotificationsListPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search notifications" aria-label="Search notifications" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        </div>
         <div>
           <h1 className="text-xl font-semibold text-[var(--color-text)]">Notifications</h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">Updates relevant to you.</p>

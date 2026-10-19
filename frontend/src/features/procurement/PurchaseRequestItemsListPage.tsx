@@ -1,7 +1,9 @@
-import { ListChecks, Plus, Trash2 } from "lucide-react";
+import { ListChecks, Plus, Search, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { BackArrowIcon } from "@/components/ui/BackArrowIcon";
 import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/confirmContext";
@@ -21,6 +23,7 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 import { generalErrorMessage } from "@/lib/formErrors";
@@ -28,6 +31,8 @@ import { generalErrorMessage } from "@/lib/formErrors";
 import { useDeletePurchaseRequestItem, usePurchaseRequest, usePurchaseRequestItemList } from "./useProcurementCrud";
 
 export function PurchaseRequestItemsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const { id } = useParams<{ id: string }>();
   const requestId = id as string;
   const navigate = useNavigate();
@@ -37,7 +42,7 @@ export function PurchaseRequestItemsListPage() {
   const canDelete = useHasPermission("procurement.delete");
 
   const { data: request, isLoading: isLoadingRequest } = usePurchaseRequest(requestId);
-  const filterParams = { request: requestId };
+  const filterParams = { search: debouncedSearch || undefined, request: requestId };
   const { data, isLoading, isError, error } = usePurchaseRequestItemList({ ...filterParams, page_size: 100 });
   const { data: stats } = useSummaryStats("procurement/request-items", filterParams);
   const deleteItem = useDeletePurchaseRequestItem();
@@ -80,6 +85,9 @@ export function PurchaseRequestItemsListPage() {
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by item" aria-label="Search by item" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <h2 className="text-lg font-semibold text-[var(--color-text)]">
           Items for {request?.title ?? "this request"}
         </h2>

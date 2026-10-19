@@ -1,8 +1,9 @@
-import { BookOpen, ClipboardCheck, GraduationCap, MessageSquare, Plus, Trash2, Users } from "lucide-react";
+import { BookOpen, ClipboardCheck, GraduationCap, MessageSquare, Plus, Search, Trash2, Users } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/confirmContext";
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission, useHasRole } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -30,6 +32,8 @@ import { useAcademicYears, useSchoolClasses, useSubjects } from "./useAcademicsL
 import { useDeleteSubjectOffering, useSubjectOfferingList, useTermList } from "./useAcademicsCrud";
 
 export function SubjectOfferingsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -48,7 +52,7 @@ export function SubjectOfferingsListPage() {
   const { data: classes } = useSchoolClasses();
   const { data: subjects } = useSubjects();
 
-  const filterParams = {
+  const filterParams = { search: debouncedSearch || undefined,
     academic_year: academicYear || undefined,
     term: term || undefined,
     school_class: schoolClass || undefined,
@@ -90,6 +94,9 @@ export function SubjectOfferingsListPage() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search subject, class or teacher" aria-label="Search subject, class or teacher" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <div className="flex flex-wrap gap-3">
           <div className="w-full max-w-[180px]">
             <Select value={academicYear} onChange={(e) => { setAcademicYear(e.target.value); setTerm(""); }}>

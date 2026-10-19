@@ -131,7 +131,7 @@ export function RecordDetailPage() {
               <OpenFileButton
                 url={record.file}
                 title={record.title}
-                className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-subtle)] px-4 py-3 text-sm font-medium text-[var(--color-primary)] hover:underline"
+                className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-subtle)] px-4 py-3 text-sm font-medium text-[var(--color-primary)]"
               >
                 <FileText className="size-5" aria-hidden="true" />
                 Open attachment

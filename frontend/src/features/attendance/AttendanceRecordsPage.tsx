@@ -1,4 +1,4 @@
-import { CalendarX2, Plus, Trash2 } from "lucide-react";
+import { CalendarX2, Plus, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -24,6 +24,7 @@ import { useToast } from "@/components/ui/toastContext";
 import { useSubjectList } from "@/features/academics/useAcademicsCrud";
 import { useAllSections } from "@/features/academics/useAcademicsLookups";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import type { ApiError } from "@/lib/api-client";
 
 import { attendanceStatusLabel, attendanceStatusTone } from "./statusTone";
@@ -34,6 +35,8 @@ const PAGE_SIZE = 25;
 const STATUS_OPTIONS: AttendanceStatus[] = ["present", "absent", "late", "excused", "early_departure"];
 
 export function AttendanceRecordsPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -50,6 +53,7 @@ export function AttendanceRecordsPage() {
   const { data: subjects } = useSubjectList({ page_size: 100 });
 
   const { data, isLoading, isError, error, isFetching } = useStudentAttendanceList({
+    search: debouncedSearch || undefined,
     page,
     page_size: PAGE_SIZE,
     date: date || undefined,
@@ -76,6 +80,9 @@ export function AttendanceRecordsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by student or note" aria-label="Search by student or note" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        </div>
         <div className="flex flex-wrap gap-3">
           <div className="w-full max-w-[160px]">
             <Input

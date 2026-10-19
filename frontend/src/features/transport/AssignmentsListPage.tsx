@@ -1,8 +1,9 @@
-import { Plus, Trash2, Users } from "lucide-react";
+import { Plus, Search, Trash2, Users } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/confirmContext";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -30,6 +32,8 @@ import { useAssignmentList, useDeleteAssignment } from "./useTransportCrud";
 const PAGE_SIZE = 25;
 
 export function AssignmentsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -38,7 +42,7 @@ export function AssignmentsListPage() {
 
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError, error, isFetching } = useAssignmentList({ page, page_size: PAGE_SIZE });
+  const { data, isLoading, isError, error, isFetching } = useAssignmentList({ search: debouncedSearch || undefined, page, page_size: PAGE_SIZE });
   const { data: stats } = useSummaryStats("transport/assignments");
   const deleteAssignment = useDeleteAssignment();
 
@@ -57,9 +61,12 @@ export function AssignmentsListPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by student, route or stop" aria-label="Search by student, route or stop" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <h2 className="text-lg font-semibold text-[var(--color-text)]">Student assignments</h2>
         <div className="flex items-center gap-2">
-          <ExportCsvButton path="/transport/assignments/" params={{}} filename="transport_assignments.csv" />
+          <ExportCsvButton path="/transport/assignments/" params={{ search: debouncedSearch || undefined }} filename="transport_assignments.csv" />
           {canCreate && (
             <Button onClick={() => navigate("/transport/assignments/new")}>
               <Plus className="size-4" aria-hidden="true" />

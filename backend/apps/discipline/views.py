@@ -30,6 +30,7 @@ class DisciplineIncidentViewSet(TenantScopedModelViewSet):
     """
 
     serializer_class = DisciplineIncidentSerializer
+    search_fields = ["student__first_name", "student__last_name", "student__admission_number", "description", "action_taken"]
     filterset_fields = ["student", "category", "severity", "status"]
     summary_stats = {
         "total": {},

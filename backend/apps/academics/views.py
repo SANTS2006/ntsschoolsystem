@@ -925,6 +925,7 @@ class PromotionRecordViewSet(TenantScopedReadOnlyViewSet):
     never through a plain create/update/delete, since a PromotionRecord is append-only."""
 
     serializer_class = PromotionRecordSerializer
+    search_fields = ["student__first_name", "student__last_name", "student__admission_number"]
     filterset_fields = ["student", "previous_academic_year", "previous_class", "status", "type"]
 
     def get_permissions(self):

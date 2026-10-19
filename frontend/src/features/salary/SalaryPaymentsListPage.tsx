@@ -1,8 +1,9 @@
-import { Banknote, Printer, Wand2 } from "lucide-react";
+import { Banknote, Printer, Search, Wand2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -21,6 +22,7 @@ import {
   TableRowLink,
 } from "@/components/ui/Table";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -35,11 +37,13 @@ const MONTH_NAMES = [
 ];
 
 export function SalaryPaymentsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const navigate = useNavigate();
   const canCreate = useHasPermission("salary.create");
   const [status, setStatus] = useState<SalaryPaymentStatus | "">("");
 
-  const filterParams = { status: status || undefined };
+  const filterParams = { search: debouncedSearch || undefined, status: status || undefined };
   const { data, isLoading, isError, error, isFetching } = useSalaryPaymentList({
     page_size: 100,
     ...filterParams,
@@ -55,6 +59,9 @@ export function SalaryPaymentsListPage() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by payment number" aria-label="Search by payment number" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <div className="w-full max-w-[180px]">
           <Select value={status} onChange={(e) => setStatus(e.target.value as SalaryPaymentStatus | "")}>
             <option value="">All statuses</option>

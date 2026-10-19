@@ -1,7 +1,9 @@
-import { ListChecks, Plus, Trash2 } from "lucide-react";
+import { ListChecks, Plus, Search, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { BackArrowIcon } from "@/components/ui/BackArrowIcon";
 import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/confirmContext";
@@ -21,12 +23,15 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
 import { useDeleteFeeStructureItem, useFeeStructure, useFeeStructureItemList } from "./useFeesCrud";
 
 export function FeeStructureItemsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const { structureId } = useParams<{ structureId: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -35,7 +40,7 @@ export function FeeStructureItemsListPage() {
   const canDelete = useHasPermission("fees.delete");
 
   const { data: structure, isLoading: isLoadingStructure } = useFeeStructure(structureId);
-  const filterParams = {
+  const filterParams = { search: debouncedSearch || undefined,
     fee_structure: structureId as string,
   };
   const { data, isLoading, isError, error } = useFeeStructureItemList({
@@ -76,6 +81,9 @@ export function FeeStructureItemsListPage() {
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by fee category" aria-label="Search by fee category" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <h2 className="text-lg font-semibold text-[var(--color-text)]">
           Line items for {structure?.name ?? "this structure"}
         </h2>

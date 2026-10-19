@@ -19,7 +19,7 @@ export function LoginPage() {
           </p>
           <a
             href="/find-school"
-            className="inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-[var(--color-primary)] hover:underline"
+            className="inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-[var(--color-primary)]"
           >
             <Search className="size-4" aria-hidden="true" />
             Find your school

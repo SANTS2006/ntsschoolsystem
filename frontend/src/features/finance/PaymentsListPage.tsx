@@ -1,8 +1,9 @@
-import { Printer, Receipt } from "lucide-react";
+import { Printer, Receipt, Search } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ExportCsvButton } from "@/components/ui/ExportCsvButton";
@@ -20,6 +21,7 @@ import {
   TableHeaderCell,
   TableRowLink,
 } from "@/components/ui/Table";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -32,12 +34,14 @@ const METHOD_OPTIONS: PaymentMethod[] = ["cash", "bank_transfer", "card", "mobil
 const STATUS_OPTIONS: PaymentStatus[] = ["completed", "partially_refunded", "refunded"];
 
 export function PaymentsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [method, setMethod] = useState<PaymentMethod | "">("");
   const [status, setStatus] = useState<PaymentStatus | "">("");
 
-  const filterParams = { method: method || undefined, status: status || undefined };
+  const filterParams = { search: debouncedSearch || undefined, method: method || undefined, status: status || undefined };
   const { data, isLoading, isError, error, isFetching } = usePaymentList({
     page,
     page_size: PAGE_SIZE,
@@ -54,6 +58,9 @@ export function PaymentsListPage() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by receipt, invoice or student" aria-label="Search by receipt, invoice or student" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        </div>
         <div className="flex flex-wrap gap-3">
         <div className="w-full max-w-[200px]">
           <Select

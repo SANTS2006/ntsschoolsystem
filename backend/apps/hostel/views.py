@@ -46,6 +46,7 @@ class HostelViewSet(HostelModelViewSet):
 
 class RoomViewSet(HostelModelViewSet):
     serializer_class = RoomSerializer
+    search_fields = ["room_number"]
     filterset_fields = ["hostel"]
     summary_stats = {
         "total": {},
@@ -57,6 +58,7 @@ class RoomViewSet(HostelModelViewSet):
 
 class BedViewSet(HostelModelViewSet):
     serializer_class = BedSerializer
+    search_fields = ["bed_number"]
     filterset_fields = ["room"]
     summary_stats = {
         "total": {},
@@ -76,6 +78,7 @@ class HostelAllocationViewSet(TenantScopedModelViewSet):
     """
 
     serializer_class = HostelAllocationSerializer
+    search_fields = ["student__first_name", "student__last_name", "student__admission_number", "bed__bed_number"]
     http_method_names = ["get", "post", "head", "options"]
     filterset_fields = ["bed", "student", "status"]
     summary_stats = {

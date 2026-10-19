@@ -44,6 +44,7 @@ class QuizViewSet(TenantScopedModelViewSet):
     permission."""
 
     serializer_class = QuizSerializer
+    search_fields = ["title"]
     filterset_fields = ["subject_offering"]
     ordering_fields = ["start_time"]
 

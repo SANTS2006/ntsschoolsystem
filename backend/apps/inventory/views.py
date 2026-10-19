@@ -39,6 +39,7 @@ def _error(message, code, http_status):
 
 class InventoryCategoryViewSet(TenantScopedModelViewSet):
     serializer_class = InventoryCategorySerializer
+    search_fields = ["name", "description"]
     summary_stats = {"total": {}}
 
     def get_permissions(self):
@@ -118,6 +119,7 @@ class InventoryTransactionViewSet(TenantScopedReadOnlyViewSet):
     services.record_stock_in()/record_stock_out(), never directly through this API."""
 
     serializer_class = InventoryTransactionSerializer
+    search_fields = ["item__name", "reason"]
     filterset_fields = ["item", "transaction_type"]
     summary_stats = {"total": {}, "by_transaction_type": {"groupby": "transaction_type"}}
 

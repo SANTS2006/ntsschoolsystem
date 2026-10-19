@@ -17,7 +17,7 @@ RESERVED_SLUGS = frozenset(
         "two-factor", "verify-card", "verify-email", "accept-invitation", "find-school", "sw.js", "manifest.webmanifest",
         "favicon.ico", "robots.txt", "my-attendance", "my-discipline", "my-documents", "my-graduation-status",
         "my-id-card", "my-lessons", "my-live-sessions", "my-medical", "my-meetings", "my-quizzes", "my-results",
-        "my-staff-attendance", "my-subjects", "my-timetable", "my-transport", "health", "www", "app", "nts",
+        "my-staff-attendance", "my-fees", "my-salary", "my-subjects", "my-timetable", "my-transport", "health", "www", "app", "nts",
         # the public website's own pages (see website/ and apps.common.spa)
         "product", "features", "who-its-for", "how-it-works", "benefits", "security", "pricing", "request-demo",
         "contact", "about", "support", "resources", "faq", "legal", "site-assets", "sitemap.xml", "my-hostel",

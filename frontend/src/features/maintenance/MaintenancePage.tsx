@@ -60,7 +60,7 @@ function MaintenanceForm({ current }: { current: Maintenance }) {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <PageHeader
         title="Maintenance"
         description="Tell everyone the system is being worked on. A banner shows the message, and users can be emailed."

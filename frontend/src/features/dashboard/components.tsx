@@ -128,7 +128,7 @@ export function DashboardTable({ spec }: { spec: DashboardTableSpec }) {
       <CardHeader className="flex flex-row items-center justify-between gap-2">
         <CardTitle className="text-sm font-medium">{spec.title}</CardTitle>
         {spec.link && (
-          <Link to={spec.link} className="text-xs font-medium text-[var(--color-primary)] hover:underline">
+          <Link to={spec.link} className="text-xs font-medium text-[var(--color-primary)]">
             View all
           </Link>
         )}
@@ -173,7 +173,7 @@ export function AttentionList({ alerts }: { alerts: DashboardAlert[] }) {
       {alerts.map((alert) => (
         <Alert key={alert.message} tone={alert.tone}>
           {alert.link ? (
-            <Link to={alert.link} className="hover:underline">
+            <Link to={alert.link} className="">
               {alert.message}
             </Link>
           ) : (
@@ -262,7 +262,7 @@ export function FilterBar({
         ))}
       </select>
       {(term || school_class) && (
-        <button type="button" onClick={() => onChange({})} className="text-sm font-medium text-[var(--color-primary)] hover:underline">
+        <button type="button" onClick={() => onChange({})} className="text-sm font-medium text-[var(--color-primary)]">
           Clear filters
         </button>
       )}

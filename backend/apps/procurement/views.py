@@ -135,6 +135,7 @@ class PurchaseRequestViewSet(TenantScopedModelViewSet):
 
 class PurchaseRequestItemViewSet(TenantScopedModelViewSet):
     serializer_class = PurchaseRequestItemSerializer
+    search_fields = ["description"]
     filterset_fields = ["request"]
     summary_stats = {"total": {}}
 
@@ -211,6 +212,7 @@ class PurchaseOrderViewSet(TenantScopedModelViewSet):
 
 class PurchaseOrderItemViewSet(TenantScopedModelViewSet):
     serializer_class = PurchaseOrderItemSerializer
+    search_fields = ["description"]
     filterset_fields = ["order"]
     summary_stats = {"total": {}}
 

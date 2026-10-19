@@ -1,7 +1,9 @@
-import { MapPin, Plus, Trash2 } from "lucide-react";
+import { MapPin, Plus, Search, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { BackArrowIcon } from "@/components/ui/BackArrowIcon";
 import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/confirmContext";
@@ -21,12 +23,15 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
 import { useDeleteStop, useRoute, useStopList } from "./useTransportCrud";
 
 export function StopsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const { routeId } = useParams<{ routeId: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -35,7 +40,7 @@ export function StopsListPage() {
   const canDelete = useHasPermission("transport.delete");
 
   const { data: route, isLoading: isLoadingRoute } = useRoute(routeId);
-  const filterParams = { route: routeId };
+  const filterParams = { search: debouncedSearch || undefined, route: routeId };
   const { data, isLoading, isError, error } = useStopList(
     { ...filterParams, page_size: 100 },
     { enabled: !!routeId },
@@ -72,6 +77,9 @@ export function StopsListPage() {
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search stops" aria-label="Search stops" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <h2 className="text-lg font-semibold text-[var(--color-text)]">Stops on {route?.name ?? "this route"}</h2>
         <div className="flex items-center gap-2">
           <ExportCsvButton path="/transport/stops/" params={filterParams} filename="transport_stops.csv" />

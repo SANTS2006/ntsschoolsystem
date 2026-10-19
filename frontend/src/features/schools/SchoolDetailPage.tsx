@@ -121,7 +121,7 @@ export function SchoolDetailPage() {
                 href={schoolUrl(school.slug)}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--color-primary)] hover:underline"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--color-primary)]"
               >
                 {schoolUrl(school.slug).replace(/^https?:\/\//, "")}
                 <ExternalLink className="size-3.5" aria-hidden="true" />

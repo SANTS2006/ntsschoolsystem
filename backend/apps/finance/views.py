@@ -76,6 +76,7 @@ class FeeStructureViewSet(FeesModelViewSet):
 
 class FeeStructureItemViewSet(FeesModelViewSet):
     serializer_class = FeeStructureItemSerializer
+    search_fields = ["fee_category__name"]
     filterset_fields = ["fee_structure"]
     summary_stats = {
         "total": {},
@@ -298,6 +299,7 @@ class InvoiceViewSet(TenantScopedModelViewSet):
 
 class InvoiceLineItemViewSet(FeesModelViewSet):
     serializer_class = InvoiceLineItemSerializer
+    search_fields = ["description", "fee_category__name"]
     filterset_fields = ["invoice"]
     summary_stats = {
         "total": {},
@@ -344,6 +346,7 @@ _PAYMENT_ACTION_PERMISSION = {
 
 class PaymentViewSet(TenantScopedModelViewSet):
     serializer_class = PaymentSerializer
+    search_fields = ["receipt_number", "reference", "invoice__invoice_number", "invoice__student__first_name", "invoice__student__last_name"]
     http_method_names = ["get", "post", "head", "options"]
     filterset_fields = ["invoice", "method", "status"]
     summary_stats = {

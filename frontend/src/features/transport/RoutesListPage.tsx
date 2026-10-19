@@ -1,8 +1,9 @@
-import { MapPin, Plus, Route as RouteIcon, Trash2 } from "lucide-react";
+import { MapPin, Plus, Route as RouteIcon, Search, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/confirmContext";
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -31,6 +33,8 @@ import { useDeleteRoute, useRouteList } from "./useTransportCrud";
 const PAGE_SIZE = 25;
 
 export function RoutesListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -39,7 +43,7 @@ export function RoutesListPage() {
 
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError, error, isFetching } = useRouteList({ page, page_size: PAGE_SIZE });
+  const { data, isLoading, isError, error, isFetching } = useRouteList({ search: debouncedSearch || undefined, page, page_size: PAGE_SIZE });
   const { data: stats } = useSummaryStats("transport/routes");
   const deleteRoute = useDeleteRoute();
 
@@ -59,9 +63,12 @@ export function RoutesListPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search routes" aria-label="Search routes" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <h2 className="text-lg font-semibold text-[var(--color-text)]">Routes</h2>
         <div className="flex items-center gap-2">
-          <ExportCsvButton path="/transport/routes/" params={{}} filename="transport_routes.csv" />
+          <ExportCsvButton path="/transport/routes/" params={{ search: debouncedSearch || undefined }} filename="transport_routes.csv" />
           {canCreate && (
             <Button onClick={() => navigate("/transport/routes/new")}>
               <Plus className="size-4" aria-hidden="true" />

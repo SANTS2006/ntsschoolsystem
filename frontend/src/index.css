@@ -582,3 +582,12 @@ select:disabled {
 .modal-detail [data-slot="card"] {
   box-shadow: none;
 }
+
+/* Links never get an underline, on hover, focus or press. */
+a,
+a:hover,
+a:focus,
+a:active,
+a:visited {
+  text-decoration: none;
+}

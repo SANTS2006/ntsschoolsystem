@@ -111,7 +111,7 @@ export function AcademicYearsListPage() {
       {canUpdate && hasEnded(yearContext?.active) && (
         <Alert tone="warning">
           {yearContext?.active?.name} ended on {yearContext?.active?.end_date}. Run the{" "}
-          <button type="button" className="font-semibold underline" onClick={() => navigate("/academics/years/rollover")}>
+          <button type="button" className="font-semibold" onClick={() => navigate("/academics/years/rollover")}>
             year rollover
           </button>{" "}
           to move students and settings into the next year.

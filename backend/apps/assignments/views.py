@@ -84,6 +84,7 @@ class AssignmentViewSet(TenantScopedModelViewSet):
 
 class AssignmentSubmissionViewSet(TenantScopedModelViewSet):
     serializer_class = AssignmentSubmissionSerializer
+    search_fields = ["student__first_name", "student__last_name", "student__admission_number", "assignment__title"]
     filterset_fields = ["assignment", "student", "status"]
     summary_stats = {
         "total": {},

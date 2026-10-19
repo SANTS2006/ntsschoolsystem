@@ -1,8 +1,9 @@
-import { CalendarClock, Play, Plus, Radio, Square, Trash2 } from "lucide-react";
+import { CalendarClock, Play, Plus, Radio, Search, Square, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/confirmContext";
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -34,6 +36,8 @@ import { useDeleteLiveSession, useEndLiveSession, useLiveSessionList, useStartLi
 const PAGE_SIZE = 25;
 
 export function LiveSessionsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -44,7 +48,7 @@ export function LiveSessionsListPage() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<LiveSessionStatus | "">("");
 
-  const filterParams = { status: status || undefined };
+  const filterParams = { search: debouncedSearch || undefined, status: status || undefined };
   const { data, isLoading, isError, error, isFetching } = useLiveSessionList({
     page,
     page_size: PAGE_SIZE,
@@ -102,6 +106,9 @@ export function LiveSessionsListPage() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by title or subject" aria-label="Search by title or subject" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        </div>
         <div className="w-full max-w-[180px]">
           <Select value={status} onChange={(e) => { setStatus(e.target.value as LiveSessionStatus | ""); setPage(1); }}>
             <option value="">All statuses</option>

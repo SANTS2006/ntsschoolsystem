@@ -85,25 +85,60 @@ class ExportMixin:
     export_filename: str | None = None
 
     def list(self, request, *args, **kwargs):
-        if request.query_params.get("export") == "csv":
+        export = request.query_params.get("export")
+        if export == "csv":
             return self._export_csv(request)
+        if export in ("xlsx", "excel"):
+            return self._export_xlsx(request)
         return super().list(request, *args, **kwargs)
 
-    def _export_csv(self, request):
+    def _export_rows(self, request):
+        """(column names, an iterator of row-value lists) for everything matching the current filters."""
         queryset = self.filter_queryset(self.get_queryset())
         serializer_class = self.get_serializer_class()
         fields = self.export_fields or list(serializer_class().fields.keys())
         context = self.get_serializer_context()
 
         def rows():
-            writer = csv.writer(_CsvEcho())
-            yield writer.writerow(fields)
             for obj in queryset.iterator(chunk_size=500):
                 data = serializer_class(obj, context=context).data
-                yield writer.writerow(["" if data.get(f) is None else str(data.get(f)) for f in fields])
+                yield ["" if data.get(f) is None else data.get(f) for f in fields]
+
+        return fields, rows()
+
+    def _export_csv(self, request):
+        fields, source = self._export_rows(request)
+
+        def rows():
+            writer = csv.writer(_CsvEcho())
+            yield writer.writerow(fields)
+            for values in source:
+                yield writer.writerow([str(v) for v in values])
 
         filename = self.export_filename or f"{self.get_view_name().lower().replace(' ', '_')}.csv"
         response = StreamingHttpResponse(rows(), content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+    def _export_xlsx(self, request):
+        """The same rows as the CSV export, as an Excel workbook. Whole numbers stay numbers; everything else is text so
+        admission numbers, phone numbers and codes keep their leading zeros."""
+        from io import BytesIO
+
+        from django.http import HttpResponse
+        from openpyxl import Workbook
+
+        fields, source = self._export_rows(request)
+        workbook = Workbook(write_only=True)
+        sheet = workbook.create_sheet("Export")
+        sheet.append(list(fields))
+        for values in source:
+            sheet.append([v if isinstance(v, int) and not isinstance(v, bool) else str(v) for v in values])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        base = self.export_filename or f"{self.get_view_name().lower().replace(' ', '_')}.csv"
+        filename = base.rsplit(".", 1)[0] + ".xlsx"
+        response = HttpResponse(buffer.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 

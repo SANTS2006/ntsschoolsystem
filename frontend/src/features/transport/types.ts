@@ -112,6 +112,7 @@ export interface StudentTransportAssignmentPayload {
 }
 
 export interface StudentTransportAssignmentListParams {
+  search?: string;
   route?: string;
   stop?: string;
   page?: number;

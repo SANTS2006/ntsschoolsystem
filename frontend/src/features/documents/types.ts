@@ -14,6 +14,7 @@ export interface DocumentCategoryPayload {
 }
 
 export interface DocumentCategoryListParams {
+  search?: string;
   page?: number;
   page_size?: number;
 }

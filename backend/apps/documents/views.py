@@ -25,6 +25,7 @@ def _ok(message="", **extra):
 
 class DocumentCategoryViewSet(TenantScopedModelViewSet):
     serializer_class = DocumentCategorySerializer
+    search_fields = ["name", "description"]
     summary_stats = {"total": {}}
 
     def get_permissions(self):

@@ -15,7 +15,7 @@ export const RESERVED_PATHS = new Set([
   "two-factor", "verify-card", "verify-email", "accept-invitation", "find-school", "sw.js", "manifest.webmanifest",
   "favicon.ico", "robots.txt", "my-attendance", "my-discipline", "my-documents", "my-graduation-status",
   "my-id-card", "my-lessons", "my-live-sessions", "my-medical", "my-meetings", "my-quizzes", "my-results",
-  "my-staff-attendance", "my-subjects", "my-timetable", "my-transport", "health", "www", "app", "nts",
+  "my-staff-attendance", "my-fees", "my-salary", "my-subjects", "my-timetable", "my-transport", "health", "www", "app", "nts",
 ]);
 
 /** The school slug a URL path belongs to, or null for the platform / generic / public pages. */

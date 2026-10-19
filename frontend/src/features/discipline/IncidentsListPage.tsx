@@ -1,8 +1,9 @@
-import { AlertTriangle, CheckCircle2, Plus, ShieldAlert, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Plus, Search, ShieldAlert, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/confirmContext";
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -36,6 +38,8 @@ const SEVERITIES: DisciplineSeverity[] = ["minor", "moderate", "severe"];
 const STATUSES: DisciplineStatus[] = ["reported", "under_review", "resolved"];
 
 export function IncidentsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -46,7 +50,7 @@ export function IncidentsListPage() {
   const [severity, setSeverity] = useState<DisciplineSeverity | "">("");
   const [status, setStatus] = useState<DisciplineStatus | "">("");
 
-  const filterParams = { severity: severity || undefined, status: status || undefined };
+  const filterParams = { search: debouncedSearch || undefined, severity: severity || undefined, status: status || undefined };
   const { data, isLoading, isError, error, isFetching } = useIncidentList({
     page,
     page_size: PAGE_SIZE,
@@ -88,6 +92,9 @@ export function IncidentsListPage() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by student or description" aria-label="Search by student or description" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        </div>
         <div className="flex flex-wrap gap-3">
           <div className="w-full max-w-[180px]">
             <Select

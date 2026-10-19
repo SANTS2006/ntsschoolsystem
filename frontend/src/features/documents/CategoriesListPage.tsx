@@ -1,8 +1,9 @@
-import { FolderClosed, Plus, Trash2 } from "lucide-react";
+import { FolderClosed, Plus, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/confirmContext";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -30,6 +32,8 @@ import { useCategoryList, useDeleteCategory } from "./useDocumentsCrud";
 const PAGE_SIZE = 25;
 
 export function CategoriesListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -38,7 +42,7 @@ export function CategoriesListPage() {
 
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError, error, isFetching } = useCategoryList({ page, page_size: PAGE_SIZE });
+  const { data, isLoading, isError, error, isFetching } = useCategoryList({ search: debouncedSearch || undefined, page, page_size: PAGE_SIZE });
   const { data: stats } = useSummaryStats("document-categories", {});
   const deleteCategory = useDeleteCategory();
 
@@ -58,9 +62,12 @@ export function CategoriesListPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search categories" aria-label="Search categories" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <h2 className="text-lg font-semibold text-[var(--color-text)]">Categories</h2>
         <div className="flex items-center gap-2">
-          <ExportCsvButton path="/document-categories/" params={{}} filename="document_categories.csv" />
+          <ExportCsvButton path="/document-categories/" params={{ search: debouncedSearch || undefined }} filename="document_categories.csv" />
           {canCreate && (
             <Button onClick={() => navigate("/documents/categories/new")}>
               <Plus className="size-4" aria-hidden="true" />

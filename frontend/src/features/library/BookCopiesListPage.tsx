@@ -1,7 +1,9 @@
-import { Layers, Plus, Trash2 } from "lucide-react";
+import { Layers, Plus, Search, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { BackArrowIcon } from "@/components/ui/BackArrowIcon";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -22,6 +24,7 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -29,6 +32,8 @@ import { copyStatusTone, statusLabel } from "./statusTone";
 import { useBook, useBookCopyList, useDeleteBookCopy } from "./useLibraryCrud";
 
 export function BookCopiesListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -37,7 +42,7 @@ export function BookCopiesListPage() {
   const canDelete = useHasPermission("library.delete");
 
   const { data: book, isLoading: isLoadingBook } = useBook(bookId);
-  const filterParams = { book: bookId };
+  const filterParams = { search: debouncedSearch || undefined, book: bookId };
   const { data, isLoading, isError, error } = useBookCopyList(
     { ...filterParams, page_size: 100 },
     { enabled: !!bookId },
@@ -74,6 +79,9 @@ export function BookCopiesListPage() {
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by book or copy number" aria-label="Search by book or copy number" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <h2 className="text-lg font-semibold text-[var(--color-text)]">Copies of {book?.title ?? "this book"}</h2>
         <div className="flex items-center gap-2">
           <ExportCsvButton path="/library/copies/" params={filterParams} filename="library_book_copies.csv" />

@@ -1,4 +1,4 @@
-import { AlertTriangle, ListChecks, Wallet, XCircle } from "lucide-react";
+import { AlertTriangle, BellRing, ListChecks, Wallet, XCircle } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
@@ -25,14 +25,15 @@ import type { ApiError } from "@/lib/api-client";
 import { generalErrorMessage } from "@/lib/formErrors";
 
 import { invoiceStatusTone, paymentStatusTone, statusLabel } from "./statusTone";
+import { useRemindInvoice } from "./reminders";
 import { useCancelInvoice, useInvoice, useInvoiceLineItemList } from "./useFeesCrud";
 import { usePaymentList } from "./usePaymentsCrud";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{label}</p>
-      <p className="mt-0.5 text-sm text-[var(--color-text)]">
+      <p className="mt-0.5 break-words text-sm text-[var(--color-text)]">
         {value || <span className="text-[var(--color-text-muted)]">—</span>}
       </p>
     </div>
@@ -51,6 +52,7 @@ export function InvoiceDetailPage() {
   const { data: lineItems } = useInvoiceLineItemList({ invoice: id as string, page_size: 100 });
   const { data: payments } = usePaymentList({ invoice: id, page_size: 100 });
   const cancelInvoice = useCancelInvoice();
+  const remind = useRemindInvoice();
 
   // InvoiceSerializer doesn't expose academic_year_name/term_name companions (unlike every
   // other domain's raw-FK pattern) — resolved here from the same lookups every other form
@@ -75,6 +77,14 @@ export function InvoiceDetailPage() {
     });
   };
 
+  const handleRemind = () => {
+    if (!invoice) return;
+    remind.mutate(invoice.id, {
+      onSuccess: () => showToast({ title: `Reminder sent to ${invoice.student_name}` }),
+      onError: (err: ApiError) => showToast({ title: "Reminder not sent", description: generalErrorMessage(err), tone: "danger" }),
+    });
+  };
+
   if (isLoading) {
     return <FullPageSpinner />;
   }
@@ -87,7 +97,7 @@ export function InvoiceDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => navigate("/finance/invoices")}
@@ -96,7 +106,13 @@ export function InvoiceDetailPage() {
           <BackArrowIcon className="size-4" />
           Back to invoices
         </button>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {canUpdate && Number(invoice.balance) > 0 && invoice.status !== "cancelled" && (
+            <Button variant="secondary" size="sm" onClick={handleRemind} isLoading={remind.isPending}>
+              <BellRing className="size-4" aria-hidden="true" />
+              Send reminder
+            </Button>
+          )}
           {canUpdate && (
             <Button
               variant="secondary"
@@ -123,10 +139,10 @@ export function InvoiceDetailPage() {
       </div>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-base font-semibold text-[var(--color-text)]">{invoice.invoice_number}</CardTitle>
-            <p className="text-sm text-[var(--color-text-muted)]">{invoice.student_name}</p>
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <CardTitle className="break-words text-base font-semibold text-[var(--color-text)]">{invoice.invoice_number}</CardTitle>
+            <p className="break-words text-sm text-[var(--color-text-muted)]">{invoice.student_name}</p>
           </div>
           <div className="flex items-center gap-2">
             {invoice.is_overdue && (
@@ -138,7 +154,7 @@ export function InvoiceDetailPage() {
             <Badge tone={invoiceStatusTone(invoice.status)}>{statusLabel(invoice.status)}</Badge>
           </div>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <CardContent className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 sm:grid-cols-3">
           <Field label="Academic year" value={academicYearName} />
           <Field label="Term" value={termName} />
           <Field label="Due date" value={invoice.due_date} />

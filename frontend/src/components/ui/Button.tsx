@@ -34,9 +34,11 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "h-9 px-3.5 text-sm gap-1.5",
-  md: "h-11 px-5 text-sm gap-2",
-  lg: "h-12 px-6 text-base gap-2",
+  // A minimum height (not a fixed one) so a long label wraps onto a second line instead of spilling out of the button on a
+  // narrow screen; the side padding tightens below the `sm` breakpoint for the same reason.
+  sm: "min-h-9 px-3 py-1.5 text-sm gap-1.5 sm:px-3.5",
+  md: "min-h-11 px-4 py-2 text-sm gap-2 sm:px-5",
+  lg: "min-h-12 px-5 py-2.5 text-base gap-2 sm:px-6",
 };
 
 /** How long after a click a button waits for work to start before deciding the click was instant. */
@@ -99,7 +101,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         aria-busy={busy || undefined}
         onClick={handleClick}
         className={cn(
-          "inline-flex items-center justify-center rounded-[var(--radius-md)] font-semibold transition-all duration-200 ease-out",
+          "inline-flex max-w-full items-center justify-center rounded-[var(--radius-md)] text-center font-semibold leading-snug transition-all duration-200 ease-out [&>svg]:shrink-0",
           "hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.97]",
           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
           "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none disabled:active:scale-100",

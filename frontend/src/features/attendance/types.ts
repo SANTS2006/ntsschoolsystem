@@ -19,6 +19,7 @@ export interface StudentAttendance {
 }
 
 export interface StudentAttendanceListParams {
+  search?: string;
   page?: number;
   page_size?: number;
   student?: string;

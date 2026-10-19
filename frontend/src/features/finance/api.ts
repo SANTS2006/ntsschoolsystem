@@ -146,7 +146,7 @@ export async function fetchInvoiceStats(): Promise<InvoiceStats> {
 }
 
 export async function fetchInvoiceLineItems(
-  params: { invoice: string; page_size?: number },
+  params: { invoice: string; page_size?: number; search?: string },
 ): Promise<PaginatedResponse<InvoiceLineItem>> {
   const { data } = await apiClient.get<PaginatedResponse<InvoiceLineItem>>("/finance/invoice-line-items/", {
     params,

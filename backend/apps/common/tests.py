@@ -172,6 +172,27 @@ class TestExportMixin:
         assert len(rows) == 3  # header + 2 rooms
 
     @pytest.mark.django_db
+    def test_export_xlsx_is_a_workbook_of_the_filtered_rows(self, api_client):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+        from tests.factories import RoomFactory
+
+        school, principal = self._principal()
+        RoomFactory(school=school, name="Lab 1", capacity=20)
+        RoomFactory(school=school, name="Gym", capacity=50)
+        self._login(api_client, principal)
+
+        response = api_client.get("/api/v1/timetable/rooms/?export=xlsx&search=Lab")
+
+        assert response.status_code == 200
+        assert "spreadsheetml" in response["Content-Type"]
+        assert response["Content-Disposition"] == 'attachment; filename="room_list.xlsx"'
+        rows = list(load_workbook(BytesIO(response.content)).active.iter_rows(values_only=True))
+        assert rows[0][:3] == ("id", "name", "capacity")
+        assert len(rows) == 2 and rows[1][1] == "Lab 1" and rows[1][2] == 20
+
+    @pytest.mark.django_db
     def test_export_csv_respects_the_same_filters_as_a_normal_list(self, api_client):
         from tests.factories import RoomFactory
 

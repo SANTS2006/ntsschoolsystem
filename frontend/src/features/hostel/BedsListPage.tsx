@@ -1,7 +1,9 @@
-import { BedSingle, CheckCircle2, Plus, Trash2 } from "lucide-react";
+import { BedSingle, CheckCircle2, Plus, Search, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { BackArrowIcon } from "@/components/ui/BackArrowIcon";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -22,12 +24,15 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
 import { useBedList, useDeleteBed, useRoom } from "./useHostelCrud";
 
 export function BedsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const { hostelId, roomId } = useParams<{ hostelId: string; roomId: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -36,7 +41,7 @@ export function BedsListPage() {
   const canDelete = useHasPermission("hostel.delete");
 
   const { data: room, isLoading: isLoadingRoom } = useRoom(roomId);
-  const filterParams = { room: roomId };
+  const filterParams = { search: debouncedSearch || undefined, room: roomId };
   const { data, isLoading, isError, error } = useBedList({ ...filterParams, page_size: 100 }, { enabled: !!roomId });
   const { data: stats } = useSummaryStats("hostel/beds", filterParams);
   const deleteBed = useDeleteBed();
@@ -70,6 +75,9 @@ export function BedsListPage() {
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by bed number" aria-label="Search by bed number" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <h2 className="text-lg font-semibold text-[var(--color-text)]">Beds in room {room?.room_number ?? ""}</h2>
         <div className="flex items-center gap-2">
           <ExportCsvButton path="/hostel/beds/" params={filterParams} filename="hostel_beds.csv" />

@@ -247,7 +247,7 @@ export function useInvoiceStats() {
   });
 }
 
-export function useInvoiceLineItemList(params: { invoice: string; page_size?: number }) {
+export function useInvoiceLineItemList(params: { invoice: string; page_size?: number; search?: string }) {
   return useQuery({
     queryKey: [...LINE_ITEMS_KEY, "list", params],
     queryFn: () => fetchInvoiceLineItems(params),

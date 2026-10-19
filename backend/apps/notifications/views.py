@@ -28,6 +28,7 @@ class NotificationViewSet(TenantScopedReadOnlyViewSet):
     """
 
     serializer_class = NotificationSerializer
+    search_fields = ["title", "message"]
     filterset_fields = ["category", "priority", "is_read"]
     summary_stats = {
         "total": {},

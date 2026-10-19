@@ -1,7 +1,9 @@
-import { BedDouble, DoorClosed, Plus, Trash2 } from "lucide-react";
+import { BedDouble, DoorClosed, Plus, Search, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { BackArrowIcon } from "@/components/ui/BackArrowIcon";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -22,12 +24,15 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
 import { useDeleteRoom, useHostel, useRoomList } from "./useHostelCrud";
 
 export function HostelRoomsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const { hostelId } = useParams<{ hostelId: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -36,7 +41,7 @@ export function HostelRoomsListPage() {
   const canDelete = useHasPermission("hostel.delete");
 
   const { data: hostel, isLoading: isLoadingHostel } = useHostel(hostelId);
-  const filterParams = { hostel: hostelId };
+  const filterParams = { search: debouncedSearch || undefined, hostel: hostelId };
   const { data, isLoading, isError, error } = useRoomList(
     { ...filterParams, page_size: 100 },
     { enabled: !!hostelId },
@@ -73,6 +78,9 @@ export function HostelRoomsListPage() {
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by room number" aria-label="Search by room number" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <h2 className="text-lg font-semibold text-[var(--color-text)]">Rooms in {hostel?.name ?? "this hostel"}</h2>
         <div className="flex items-center gap-2">
           <ExportCsvButton path="/hostel/rooms/" params={filterParams} filename="hostel_rooms.csv" />

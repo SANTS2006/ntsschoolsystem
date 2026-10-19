@@ -1,7 +1,9 @@
-import { ListChecks, Plus, Trash2 } from "lucide-react";
+import { ListChecks, Plus, Search, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { BackArrowIcon } from "@/components/ui/BackArrowIcon";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -22,6 +24,7 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -35,6 +38,8 @@ function lineTypeTone(lineType: string): "success" | "warning" | "neutral" {
 }
 
 export function SalaryStructureItemsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const { structureId } = useParams<{ structureId: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -43,7 +48,7 @@ export function SalaryStructureItemsListPage() {
   const canDelete = useHasPermission("salary.delete");
 
   const { data: structure, isLoading: isLoadingStructure } = useSalaryStructure(structureId);
-  const filterParams = { salary_structure: structureId as string };
+  const filterParams = { search: debouncedSearch || undefined, salary_structure: structureId as string };
   const { data, isLoading, isError, error } = useSalaryStructureItemList({ ...filterParams, page_size: 100 });
   const { data: stats } = useSummaryStats("salary/salary-structure-items", filterParams);
   const deleteItem = useDeleteSalaryStructureItem();
@@ -80,6 +85,9 @@ export function SalaryStructureItemsListPage() {
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by description" aria-label="Search by description" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <h2 className="text-lg font-semibold text-[var(--color-text)]">
           Line items for {structure?.name ?? "this structure"}
         </h2>

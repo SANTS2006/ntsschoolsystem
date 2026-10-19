@@ -1,7 +1,9 @@
-import { CheckCircle2, FileCheck, Paperclip, Pencil, Trash2 } from "lucide-react";
+import { CheckCircle2, FileCheck, Paperclip, Pencil, Search, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { OpenFileButton } from "@/components/ui/FileViewer";
 import { BackArrowIcon } from "@/components/ui/BackArrowIcon";
 import { Badge } from "@/components/ui/Badge";
@@ -22,6 +24,7 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -29,6 +32,8 @@ import { statusLabel, submissionStatusTone } from "./statusTone";
 import { useAssignment, useDeleteSubmission, useSubmissionList } from "./useAssignmentsCrud";
 
 export function SubmissionsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const { assignmentId } = useParams<{ assignmentId: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -38,7 +43,7 @@ export function SubmissionsListPage() {
 
   const { data: assignment, isLoading: isLoadingAssignment } = useAssignment(assignmentId);
   const { data, isLoading, isError, error } = useSubmissionList(
-    { assignment: assignmentId, page_size: 100 },
+    { search: debouncedSearch || undefined, assignment: assignmentId, page_size: 100 },
     { enabled: !!assignmentId },
   );
   const { data: stats } = useSummaryStats("assignment-submissions", { assignment: assignmentId });
@@ -73,12 +78,15 @@ export function SubmissionsListPage() {
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by student or assignment" aria-label="Search by student or assignment" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <h2 className="text-lg font-semibold text-[var(--color-text)]">
           Submissions for {assignment?.title ?? "this assignment"}
         </h2>
         <ExportCsvButton
           path="/assignment-submissions/"
-          params={{ assignment: assignmentId }}
+          params={{ assignment: assignmentId, search: debouncedSearch || undefined }}
           filename="assignment_submissions.csv"
         />
       </div>

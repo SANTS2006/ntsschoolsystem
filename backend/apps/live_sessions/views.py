@@ -38,6 +38,7 @@ def _error(message, code, http_status, errors=None):
 
 class LiveSessionViewSet(TenantScopedModelViewSet):
     serializer_class = LiveSessionSerializer
+    search_fields = ["title", "subject__name"]
     filterset_fields = ["school_class", "section", "subject", "lesson", "status"]
     summary_stats = {
         "total": {},

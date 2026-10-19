@@ -60,6 +60,7 @@ class SalaryStructureViewSet(SalaryModelViewSet):
 
 class SalaryStructureItemViewSet(SalaryModelViewSet):
     serializer_class = SalaryStructureItemSerializer
+    search_fields = ["description"]
     filterset_fields = ["salary_structure", "line_type"]
     summary_stats = {
         "total": {},
@@ -98,6 +99,7 @@ class SalaryStructureItemViewSet(SalaryModelViewSet):
 
 class StaffSalaryAssignmentViewSet(SalaryModelViewSet):
     serializer_class = StaffSalaryAssignmentSerializer
+    search_fields = ["staff__user__first_name", "staff__user__last_name"]
     filterset_fields = ["staff", "salary_structure"]
     summary_stats = {
         "total": {},

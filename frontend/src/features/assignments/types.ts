@@ -67,6 +67,7 @@ export interface AssignmentSubmission {
 }
 
 export interface AssignmentSubmissionListParams {
+  search?: string;
   assignment?: string;
   student?: string;
   status?: SubmissionStatus;

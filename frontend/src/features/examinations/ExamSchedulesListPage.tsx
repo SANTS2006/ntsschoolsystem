@@ -1,8 +1,9 @@
-import { ClipboardList, Plus, Trash2 } from "lucide-react";
+import { ClipboardList, Plus, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { BackArrowIcon } from "@/components/ui/BackArrowIcon";
 import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/confirmContext";
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -31,6 +33,8 @@ import { useDeleteExamSchedule, useExam, useExamScheduleList } from "./useExamin
 const PAGE_SIZE = 25;
 
 export function ExamSchedulesListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const { examId } = useParams<{ examId: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -40,7 +44,7 @@ export function ExamSchedulesListPage() {
 
   const [page, setPage] = useState(1);
   const { data: exam, isLoading: isLoadingExam } = useExam(examId);
-  const filterParams = { exam: examId };
+  const filterParams = { search: debouncedSearch || undefined, exam: examId };
   const { data, isLoading, isError, error, isFetching } = useExamScheduleList({
     page,
     page_size: PAGE_SIZE,
@@ -78,6 +82,9 @@ export function ExamSchedulesListPage() {
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by exam, subject or class" aria-label="Search by exam, subject or class" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <h2 className="text-lg font-semibold text-[var(--color-text)]">
           Schedules for {exam?.name ?? "this exam"}
         </h2>

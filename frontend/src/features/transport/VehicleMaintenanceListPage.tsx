@@ -1,7 +1,9 @@
-import { Plus, Trash2, Wrench } from "lucide-react";
+import { Plus, Search, Trash2, Wrench } from "lucide-react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { BackArrowIcon } from "@/components/ui/BackArrowIcon";
 import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/confirmContext";
@@ -21,12 +23,15 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
 import { useDeleteMaintenanceRecord, useMaintenanceList, useVehicle } from "./useTransportCrud";
 
 export function VehicleMaintenanceListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const { vehicleId } = useParams<{ vehicleId: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -35,7 +40,7 @@ export function VehicleMaintenanceListPage() {
   const canDelete = useHasPermission("transport.delete");
 
   const { data: vehicle, isLoading: isLoadingVehicle } = useVehicle(vehicleId);
-  const filterParams = { vehicle: vehicleId };
+  const filterParams = { search: debouncedSearch || undefined, vehicle: vehicleId };
   const { data, isLoading, isError, error } = useMaintenanceList(
     { ...filterParams, page_size: 100 },
     { enabled: !!vehicleId },
@@ -72,6 +77,9 @@ export function VehicleMaintenanceListPage() {
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by vehicle or description" aria-label="Search by vehicle or description" value={search} onChange={(e) => { setSearch(e.target.value); }} />
+        </div>
         <h2 className="text-lg font-semibold text-[var(--color-text)]">
           Maintenance for {vehicle?.registration_number ?? "this vehicle"}
         </h2>

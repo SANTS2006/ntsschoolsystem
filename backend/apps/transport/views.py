@@ -64,6 +64,7 @@ class RouteViewSet(TransportModelViewSet):
 
 class StopViewSet(TransportModelViewSet):
     serializer_class = StopSerializer
+    search_fields = ["name"]
     filterset_fields = ["route"]
     summary_stats = {
         "total": {},
@@ -75,6 +76,7 @@ class StopViewSet(TransportModelViewSet):
 
 class VehicleMaintenanceViewSet(TransportModelViewSet):
     serializer_class = VehicleMaintenanceSerializer
+    search_fields = ["description", "vehicle__registration_number"]
     filterset_fields = ["vehicle"]
     summary_stats = {
         "total": {},
@@ -86,6 +88,7 @@ class VehicleMaintenanceViewSet(TransportModelViewSet):
 
 class StudentTransportAssignmentViewSet(TransportModelViewSet):
     serializer_class = StudentTransportAssignmentSerializer
+    search_fields = ["student__first_name", "student__last_name", "student__admission_number", "route__name", "stop__name"]
     filterset_fields = ["route", "stop"]
     summary_stats = {
         "total": {},

@@ -284,7 +284,7 @@ export function AppShell() {
                 clearActingSchool();
                 goTo("/platform");
               }}
-              className="rounded px-2 py-0.5 underline-offset-2"
+              className="rounded px-2 py-0.5"
             >
               Exit
             </button>
@@ -302,9 +302,9 @@ export function AppShell() {
           </button>
           <div className="flex min-w-0 items-center gap-2">
             <LogoBadge logoUrl={schoolLogo} className="lg:hidden" />
-            <span className="truncate text-sm font-semibold text-[var(--color-text)]" title={schoolName}>
-              <span className="sm:hidden">{schoolInitials(schoolName)}</span>
-              <span className="hidden sm:inline">{schoolName}</span>
+            {/* On a phone only the school's logo shows; the name appears from the `sm` breakpoint up. */}
+            <span className="hidden truncate text-sm font-semibold text-[var(--color-text)] sm:inline" title={schoolName}>
+              {schoolName}
             </span>
           </div>
           <div className="flex flex-1 items-center justify-end gap-2 sm:gap-4">

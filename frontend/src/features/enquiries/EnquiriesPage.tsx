@@ -89,11 +89,11 @@ export function EnquiriesPage() {
                     <span className="text-xs text-[var(--color-text-muted)]">{new Date(enquiry.created_at).toLocaleString()}</span>
                   </div>
                   <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
-                    <a className="inline-flex items-center gap-1.5 text-[var(--color-primary)] hover:underline" href={`mailto:${enquiry.email}`}>
+                    <a className="inline-flex items-center gap-1.5 text-[var(--color-primary)]" href={`mailto:${enquiry.email}`}>
                       <Mail className="size-4" aria-hidden="true" /> {enquiry.email}
                     </a>
                     {enquiry.phone && (
-                      <a className="inline-flex items-center gap-1.5 text-[var(--color-primary)] hover:underline" href={`tel:${enquiry.phone.replace(/[^+\d]/g, "")}`}>
+                      <a className="inline-flex items-center gap-1.5 text-[var(--color-primary)]" href={`tel:${enquiry.phone.replace(/[^+\d]/g, "")}`}>
                         <Phone className="size-4" aria-hidden="true" /> {enquiry.phone}
                       </a>
                     )}

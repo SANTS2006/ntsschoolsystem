@@ -55,6 +55,7 @@ def _notify_if_absent(record: StudentAttendance):
 
 class StudentAttendanceViewSet(TenantScopedModelViewSet):
     serializer_class = StudentAttendanceSerializer
+    search_fields = ["student__first_name", "student__last_name", "student__admission_number", "notes"]
     filterset_fields = ["student", "date", "section", "subject", "status"]
     ordering_fields = ["date"]
 
@@ -128,6 +129,7 @@ class StudentAttendanceViewSet(TenantScopedModelViewSet):
 
 class StaffAttendanceViewSet(TenantScopedModelViewSet):
     serializer_class = StaffAttendanceSerializer
+    search_fields = ["staff__user__first_name", "staff__user__last_name", "notes"]
     filterset_fields = ["staff", "date", "status"]
     ordering_fields = ["date"]
     summary_stats = {

@@ -265,7 +265,7 @@ export function StaffFormPage() {
                 </option>
               ))}
             </Select>
-            <Link to="/roles/new" className="self-start text-xs font-medium text-[var(--color-primary)] hover:underline">
+            <Link to="/roles/new" className="self-start text-xs font-medium text-[var(--color-primary)]">
               + Add a new role
             </Link>
 

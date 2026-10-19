@@ -1,8 +1,9 @@
-import { AlertTriangle, Plus, Siren, Stethoscope, Trash2 } from "lucide-react";
+import { AlertTriangle, Plus, Search, Siren, Stethoscope, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/confirmContext";
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -35,6 +37,8 @@ const PAGE_SIZE = 25;
 const VISIT_TYPES: VisitType[] = ["routine", "incident", "emergency"];
 
 export function VisitsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -44,7 +48,7 @@ export function VisitsListPage() {
   const [page, setPage] = useState(1);
   const [visitType, setVisitType] = useState<VisitType | "">("");
 
-  const filterParams = { visit_type: visitType || undefined };
+  const filterParams = { search: debouncedSearch || undefined, visit_type: visitType || undefined };
   const { data, isLoading, isError, error, isFetching } = useVisitList({
     page,
     page_size: PAGE_SIZE,
@@ -81,6 +85,9 @@ export function VisitsListPage() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by student or symptoms" aria-label="Search by student or symptoms" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        </div>
         <div className="w-full max-w-[180px]">
           <Select
             value={visitType}

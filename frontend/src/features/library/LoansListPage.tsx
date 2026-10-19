@@ -1,7 +1,8 @@
-import { AlertTriangle, BookMarked, BookOpen, RotateCw, Undo2 } from "lucide-react";
+import { AlertTriangle, BookMarked, BookOpen, RotateCw, Search, Undo2 } from "lucide-react";
 import { useState } from "react";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { useConfirm } from "@/components/ui/confirmContext";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 import { generalErrorMessage } from "@/lib/formErrors";
@@ -35,6 +37,8 @@ const STATUS_OPTIONS: LoanStatus[] = ["borrowed", "returned", "lost"];
 const MAX_RENEWALS = 2;
 
 export function LoansListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const { showToast } = useToast();
   const confirm = useConfirm();
   const canUpdate = useHasPermission("library.update");
@@ -42,7 +46,7 @@ export function LoansListPage() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<LoanStatus | "">("");
 
-  const filterParams = { status: status || undefined };
+  const filterParams = { search: debouncedSearch || undefined, status: status || undefined };
   const { data, isLoading, isError, error, isFetching } = useLoanList({
     page,
     page_size: PAGE_SIZE,
@@ -88,6 +92,9 @@ export function LoansListPage() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by book or borrower" aria-label="Search by book or borrower" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        </div>
         <div className="w-full max-w-[180px]">
           <Select
             value={status}

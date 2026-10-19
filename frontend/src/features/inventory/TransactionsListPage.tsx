@@ -1,7 +1,8 @@
-import { History } from "lucide-react";
+import { History, Search } from "lucide-react";
 import { useState } from "react";
 
 import { Alert } from "@/components/ui/Alert";
+import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ExportCsvButton } from "@/components/ui/ExportCsvButton";
@@ -19,6 +20,7 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@/components/ui/Table";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -30,12 +32,14 @@ const PAGE_SIZE = 25;
 const TRANSACTION_TYPES: TransactionType[] = ["stock_in", "stock_out"];
 
 export function TransactionsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const [page, setPage] = useState(1);
   const [itemId, setItemId] = useState("");
   const [transactionType, setTransactionType] = useState<TransactionType | "">("");
 
   const { data: items } = useItemList({ page_size: 100 });
-  const filterParams = { item: itemId || undefined, transaction_type: transactionType || undefined };
+  const filterParams = { search: debouncedSearch || undefined, item: itemId || undefined, transaction_type: transactionType || undefined };
   const { data, isLoading, isError, error, isFetching } = useTransactionList({
     page,
     page_size: PAGE_SIZE,
@@ -52,6 +56,9 @@ export function TransactionsListPage() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by item or reason" aria-label="Search by item or reason" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        </div>
         <div className="flex flex-wrap gap-3">
         <div className="w-full max-w-[220px]">
           <Select

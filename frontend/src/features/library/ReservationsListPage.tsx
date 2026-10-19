@@ -1,4 +1,4 @@
-import { BookmarkCheck, Check, CheckCircle2, Clock, Plus, X } from "lucide-react";
+import { BookmarkCheck, Check, CheckCircle2, Clock, Plus, Search, X } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 import { generalErrorMessage } from "@/lib/formErrors";
@@ -44,6 +45,8 @@ const PAGE_SIZE = 25;
 const STATUS_OPTIONS: ReservationStatus[] = ["pending", "approved", "rejected", "fulfilled", "cancelled"];
 
 export function ReservationsListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -53,7 +56,7 @@ export function ReservationsListPage() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<ReservationStatus | "">("");
 
-  const filterParams = { status: status || undefined };
+  const filterParams = { search: debouncedSearch || undefined, status: status || undefined };
   const { data, isLoading, isError, error, isFetching } = useReservationList({
     page,
     page_size: PAGE_SIZE,
@@ -125,6 +128,9 @@ export function ReservationsListPage() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by book or borrower" aria-label="Search by book or borrower" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        </div>
         <div className="w-full max-w-[180px]">
           <Select
             value={status}

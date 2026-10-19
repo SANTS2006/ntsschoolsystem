@@ -1,4 +1,4 @@
-import { CalendarX2, ClipboardList, Plus, Trash2 } from "lucide-react";
+import { CalendarX2, ClipboardList, Plus, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -26,6 +26,7 @@ import {
 import { useToast } from "@/components/ui/toastContext";
 import { useHasPermission } from "@/features/auth/useAuth";
 import { useStaffLookup } from "@/features/staff/useStaffLookups";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSummaryStats } from "@/hooks/useSummaryStats";
 import type { ApiError } from "@/lib/api-client";
 
@@ -37,6 +38,8 @@ const PAGE_SIZE = 25;
 const STATUS_OPTIONS: AttendanceStatus[] = ["present", "absent", "late", "excused", "early_departure"];
 
 export function StaffAttendanceListPage() {
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const confirm = useConfirm();
@@ -49,7 +52,7 @@ export function StaffAttendanceListPage() {
   const [status, setStatus] = useState<AttendanceStatus | "">("");
   const { data: staff } = useStaffLookup();
 
-  const filterParams = {
+  const filterParams = { search: debouncedSearch || undefined,
     date: date || undefined,
     staff: staffId || undefined,
     status: status || undefined,
@@ -85,6 +88,9 @@ export function StaffAttendanceListPage() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full max-w-xs">
+          <Input icon={Search} placeholder="Search by staff name" aria-label="Search by staff name" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        </div>
         <div className="flex flex-wrap gap-3">
           <div className="w-full max-w-[160px]">
             <Input

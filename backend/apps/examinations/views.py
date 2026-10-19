@@ -49,6 +49,7 @@ class GradingScaleViewSet(ExaminationsModelViewSet):
 
 class GradeBoundaryViewSet(ExaminationsModelViewSet):
     serializer_class = GradeBoundarySerializer
+    search_fields = ["grade"]
     filterset_fields = ["grading_scale"]
     summary_stats = {
         "total": {},
@@ -74,6 +75,7 @@ class ExamViewSet(ExaminationsModelViewSet):
 
 class ExamScheduleViewSet(ExaminationsModelViewSet):
     serializer_class = ExamScheduleSerializer
+    search_fields = ["exam__name", "subject__name", "school_class__name"]
     filterset_fields = ["exam", "school_class", "subject"]
     summary_stats = {
         "total": {},

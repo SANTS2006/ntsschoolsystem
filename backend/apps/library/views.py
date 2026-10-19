@@ -70,6 +70,7 @@ class BookViewSet(LibraryModelViewSet):
 
 class BookCopyViewSet(LibraryModelViewSet):
     serializer_class = BookCopySerializer
+    search_fields = ["copy_number", "book__title"]
     filterset_fields = ["book", "status"]
     summary_stats = {
         "total": {},
@@ -88,6 +89,7 @@ class BookLoanViewSet(TenantScopedModelViewSet):
     disabled; a loan is returned, never removed."""
 
     serializer_class = BookLoanSerializer
+    search_fields = ["copy__book__title", "copy__copy_number", "student__first_name", "student__last_name", "student__admission_number", "staff__user__first_name", "staff__user__last_name"]
     http_method_names = ["get", "post", "head", "options"]
     filterset_fields = ["copy", "student", "staff", "status"]
     summary_stats = {
@@ -147,6 +149,7 @@ class BookLoanViewSet(TenantScopedModelViewSet):
 
 class BookReservationViewSet(TenantScopedModelViewSet):
     serializer_class = BookReservationSerializer
+    search_fields = ["book__title", "student__first_name", "student__last_name", "student__admission_number", "staff__user__first_name", "staff__user__last_name"]
     http_method_names = ["get", "post", "head", "options"]
     filterset_fields = ["book", "student", "staff", "status"]
     summary_stats = {

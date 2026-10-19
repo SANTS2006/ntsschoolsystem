@@ -38,6 +38,7 @@ class MedicalModelViewSet(TenantScopedModelViewSet):
 
 class MedicalProfileViewSet(MedicalModelViewSet):
     serializer_class = MedicalProfileSerializer
+    search_fields = ["student__first_name", "student__last_name", "student__admission_number", "allergies", "chronic_conditions"]
     filterset_fields = ["student", "blood_group"]
     summary_stats = {
         "total": {},
@@ -50,6 +51,7 @@ class MedicalProfileViewSet(MedicalModelViewSet):
 
 class MedicalVisitViewSet(MedicalModelViewSet):
     serializer_class = MedicalVisitSerializer
+    search_fields = ["student__first_name", "student__last_name", "student__admission_number", "symptoms", "treatment"]
     filterset_fields = ["student", "visit_type"]
     summary_stats = {
         "total": {},
